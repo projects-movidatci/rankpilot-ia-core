@@ -1,7 +1,5 @@
 from src.core.state import AgentState
-from src.strategies.legal500 import Legal500Strategy
-from src.strategies.chambers import ChambersStrategy
-from src.strategies.leaders_league import LeadersLeagueStrategy
+from src.io.strategy_selector import get_strategy
 
 def audit_node(state: AgentState) -> dict:
     """
@@ -17,17 +15,10 @@ def audit_node(state: AgentState) -> dict:
     else:
         submission_dict = {}
 
-    sub_type = getattr(state, "target_submission_type", "Legal500") or "Legal500"
-
-    if sub_type == "Legal500":
-        strategy = Legal500Strategy()
-    elif sub_type == "Chambers":
-        strategy = ChambersStrategy()
-    elif sub_type == "LeadersLeague":
-        strategy = LeadersLeagueStrategy() # <--- ADD THIS
-    else:
-        # fallback
-        strategy = Legal500Strategy()
+    sub_type = getattr(state, "target_submission_type", "Legal500")
+    state_config = getattr(state, "config", {})
+    
+    strategy = get_strategy(sub_type, state_config)
 
     # 1. Get the raw gaps from the strategy
     raw_gaps = strategy.audit(submission_dict)

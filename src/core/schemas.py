@@ -61,6 +61,13 @@ class Narratives(BaseModel):
 # -----------------------------------
 # Nominations & People (Legal 500)
 # -----------------------------------
+
+class Barrister(BaseModel):
+    name: Optional[str] = Field(None, description="Name of the independent barrister or advocate.")
+    chambers: Optional[str] = Field(None, description="The Chambers or Firm they belong to.")
+    location: Optional[str] = Field(None, description="Location or jurisdiction of the barrister.")
+    comments: Optional[str] = Field(None, description="Comments regarding the instruction or their performance.")
+
 class Partner(BaseModel):
     name: Optional[str] = Field(None, description="Full name of the leading partner.")
     location: Optional[str] = Field(None, description="Office location or city of the partner.")
@@ -152,7 +159,7 @@ class Legal500Submission(BaseSubmission):
     work_highlights_summaries: List[WorkHighlight] = Field(default_factory=list, max_length=3, description="Up to 3 brief summaries of publishable work highlights.")
     publishable_matters: List[PMatter] = Field(default_factory=list, description="Up to 20 publishable work highlights.")
     confidential_matters: List[NPMatter] = Field(default_factory=list, description="Up to 20 confidential work highlights.")
-
+    barristers: List[Barrister] = Field(default_factory=list, description="Optional details of independent barristers/advocates instructed in the past year.")
 
 # =====================================================================
 #

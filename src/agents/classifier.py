@@ -5,7 +5,7 @@ from src.io.base64_handler import decode_base64_document
 from src.io.pdf_parser import extract_text_from_pdf
 from src.io.docx_manager import extract_text_from_docx
 from src.core.llm import get_llm
-from langchain_core.prompts import ChatPromptTemplate
+from src.io.strategy_selector import get_config_path
 from pydantic import BaseModel, Field
 import traceback
 
@@ -98,6 +98,8 @@ def classification_node(state: AgentState) -> dict:
     updates["decoded_file_paths"] = decoded_file_paths
     updates["extracted_text"] = extracted_text
 
+    updates["messages"].append(f"Extraction complete. Total extracted text length is {len(extracted_text)} characters.") 
+
     # Trust Laravel's input for the document type
     current_target = getattr(state, "target_submission_type", None)
     if current_target:
@@ -110,26 +112,55 @@ def classification_node(state: AgentState) -> dict:
     updates["target_submission_type"] = current_target
 
     # =========================================================
-    # NEW: LOAD THE CONFIGURATION (Task: Hacer legible el código)
+    # NEW: DYNAMIC REGIONAL ROUTING (Centralized Factory)
     # =========================================================
-    yaml_mapping = {
-        "Chambers_USA": "configs/chambers_usa.yaml",
-        "Chambers": "configs/chambers_usa.yaml", 
-        "LeadersLeague": "configs/leaders_league_advertising.yaml",
-        "Legal500": "configs/legal500.yaml"
-    }
     
-    config_path = yaml_mapping.get(current_target, "configs/legal500.yaml")
+    # 1. Recuperación BLINDADA de metadata (Soporta dict de servidor y objeto local)
+    if isinstance(state, dict):
+        metadata = state.get("metadata", {})
+    else:
+        metadata = getattr(state, "metadata", {}) or {}
     
+    # 2. Extracción segura del Guide
+    if hasattr(metadata, "guide"):
+        guide = metadata.guide
+    elif isinstance(metadata, dict):
+        guide = metadata.get("guide", "")
+    else:
+        guide = ""
+        
+    guide = str(guide).lower() if guide else ""
+    
+    # 3. Obtenemos la ruta del YAML usando nuestra utilidad unificada
+    config_path = get_config_path(current_target, guide)
+
+    updates["messages"].append(f"Preparation node: Routing to {config_path} based on target '{current_target}' and guide '{guide}'.")
+    
+    # 4. Cargamos el YAML al estado para que viaje al Ensamblador
     try:
         with open(config_path, "r", encoding="utf-8") as f:
-            updates["config"] = yaml.safe_load(f) or {}
+            yaml_config = yaml.safe_load(f)
+            
+            if not yaml_config:
+                print(f"⚠️ Warning: El archivo {config_path} está vacío.")
+                yaml_config = {}
+                
+            updates["config"] = yaml_config # ¡AQUÍ ESTÁ LA CLAVE PARA EL ENSAMBLADOR!
+            
+            print(f"✅ YAML cargado exitosamente. Llaves encontradas: {list(yaml_config.keys())}")
             updates["messages"].append(f"Preparation node: Loaded config from {config_path}")
-    except FileNotFoundError:
+            
+    except Exception as e:
+        print(f"❌ Error crítico leyendo {config_path}: {e}")
         updates["config"] = {}
-        updates["messages"].append(f"Preparation node Error: Could not find {config_path}")
+        updates["messages"].append(f"Preparation node Error: Could not load {config_path}")
 
-    input_doc_type = getattr(state, "input_document_type", None)
+    # 5. Mapeo final del input_doc_type
+    if isinstance(state, dict):
+        input_doc_type = state.get("input_document_type", None)
+    else:
+        input_doc_type = getattr(state, "input_document_type", None)
+        
     if not input_doc_type:
         updates["input_document_type"] = "text"
 

@@ -13,34 +13,38 @@ def main():
     workflow = build_workflow()
 
     # 1. Create a dummy file as if uploaded by the user
-    file_path = r"G:\Proyectos_Python\rankpilot-core\tests\FINAL_Chambers 2026_Mexico_Perez Correa_Fintech_Submission (1)(2).docx"
+    # Puedes cambiar esta ruta a tu documento real de prueba para Asia
+    file_path = r"G:\Proyectos_Python\rankpilot-core\tests\FINAL_Chambers 2026_Mexico_Perez Correa_Fintech_Submission (1)(2).pdf" 
     
-    # 2. Read the ACTUAL PDF file so the PDF parser doesn't crash on dummy data
-    try:
-        with open(file_path, "rb") as docx_file:
-            real_docx_content = docx_file.read()
-        b64_string = base64.b64encode(real_docx_content).decode('utf-8')
-    except FileNotFoundError:
-        print(f"Error: Could not find the test document at {file_path}")
-        return
+    # Si el archivo no existe en esa ruta para la prueba, creamos un bypass seguro
+    b64_string = ""
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, "rb") as docx_file:
+                real_docx_content = docx_file.read()
+            b64_string = base64.b64encode(real_docx_content).decode('utf-8')
+        except Exception as e:
+            print(f"Error reading file: {e}")
+    else:
+        print(f"⚠️ Warning: Test document not found at {file_path}. Proceeding with raw text input.")
 
     print("\n[Local] Initializing state...")
 
     # Initial state mimicking what would be sent to initiate
     current_state = AgentState(
-        submission_id="test_001",
-        # <-- AQUÍ ESTÁ LA MAGIA: Pasamos los 5 requerimientos de Laravel
+        submission_id="test_asia_001",
         metadata=MetaData(
             directory="Legal500", 
-            guide="Latin America",
-            region="LatAm",
-            jurisdiction="Mexico",
+            guide="Asia Pacific", # <--- EL GATILLO DEL YAML DE ASIA
+            region="Asia Pacific",
+            jurisdiction="Singapore", # O la que aplique
             practice_area="Fintech",
-            firm_name="Perez Correa"
+            firm_name="Asia Law Firm"
         ),
-        base64_documents=[{"filename": file_path, "base64": b64_string}],
+        base64_documents=[{"filename": os.path.basename(file_path), "base64": b64_string}] if b64_string else [],
+        raw_text="This is a dummy text representing an Asia Pacific submission for the Fintech practice." if not b64_string else "",
         decoded_file_paths=[],
-        target_submission_type="Legal500", # (Legacy, pero lo dejamos)
+        target_submission_type="Legal500", 
         submission=None,
         gaps=[],
         questions=[],

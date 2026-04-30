@@ -80,11 +80,17 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
         # Opcional: Extraer el Executive Summary si existe (Acto 3)
         exec_summary = final_state.get("executive_summary")
         exec_summary_dict = exec_summary.model_dump() if hasattr(exec_summary, 'model_dump') else exec_summary
-
+        metadata_obj = final_state.get("metadata")
+        if hasattr(metadata_obj, 'model_dump'):
+            metadata_final = metadata_obj.model_dump()
+        elif isinstance(metadata_obj, dict):
+            metadata_final = metadata_obj
+        else:
+            metadata_final = {}
         final_agent_state = {
             "submission_id": final_state.get("submission_id"), # <-- AÑADIDO: Vital para Laravel
             "next_node": final_state.get("next_node"),         # <-- AÑADIDO: El ruteo
-            "metadata": final_state.get("metadata", {}),
+            "metadata": metadata_final,
             "submission": sub_dict,
             "gaps": final_state.get("gaps", []),               # <-- Aquí viajan los gaps
             "dismissed_gaps": final_state.get("dismissed_gaps", []),
@@ -136,8 +142,22 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
             elif target in ["Chambers", "Chambers and Partners"]:
                 sub_model = ChambersSubmission(**submission_data)
                 
+
         # Parseo de Metadata
-        meta_obj = MetaData(**state_input.metadata) if state_input.metadata else None
+        raw_metadata = state_data.get("metadata", {})
+        try:
+            meta_obj = MetaData(
+                directory=raw_metadata.get("directory"),
+                guide=raw_metadata.get("guide", ""),
+                region=raw_metadata.get("region", ""),
+                jurisdiction=raw_metadata.get("jurisdiction", ""),
+                practice_area=raw_metadata.get("practice_area", ""),
+                firm_name=raw_metadata.get("firm_name", ""),
+                location=raw_metadata.get("location", "")
+            )
+        except Exception as e:
+            print(f"⚠️ Error construyendo MetaData object: {e}")
+            meta_obj = None
 
         initial_state = {
             "submission_id": state_input.submission_id,

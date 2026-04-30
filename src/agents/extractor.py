@@ -3,43 +3,35 @@ import traceback
 from langchain_core.prompts import ChatPromptTemplate
 from typing import Dict, Any, Type
 from pydantic import BaseModel
-
+from src.io.strategy_selector import get_schema_class
 from src.core.state import AgentState
 from src.core.llm import get_llm
-from src.core.schemas import ChambersSubmission, Legal500Submission
-
-# ==========================================
-# SCHEMA FACTORY
-# ==========================================
-def get_schema_class(metadata: Any) -> Type[BaseModel]:
-    if not metadata:
-        return ChambersSubmission # Fallback
-
-    directory = getattr(metadata, "directory", "").lower()
-    
-    if "legal" in directory and "500" in directory:
-        return Legal500Submission
-    elif "leaders" in directory:
-        return ChambersSubmission 
-    else:
-        return ChambersSubmission
 
 # ==========================================
 # INGESTION NODE
 # ==========================================
 def ingestion_node(state: AgentState) -> dict:
     messages = []
-    updates = {
-        "current_step": "ingestion",
-        "messages": messages
-    }
+    updates = {"current_step": "ingestion", "messages": messages}
 
-    extracted_text = getattr(state, "extracted_text", "") or ""
-    input_document_type = getattr(state, "input_document_type", "Unknown") or "Unknown"
-    metadata = getattr(state, "metadata", None)
+    # 1. Extracción BLINDADA del estado (soporta dict y objeto)
+    if isinstance(state, dict):
+        target_type = state.get("target_submission_type", "Legal500")
+        extracted_text = state.get("extracted_text", "")
+        input_document_type = state.get("input_document_type", "Unknown")
+        metadata = state.get("metadata", None)
+    else:
+        target_type = getattr(state, "target_submission_type", "Legal500")
+        extracted_text = getattr(state, "extracted_text", "")
+        input_document_type = getattr(state, "input_document_type", "Unknown")
+        metadata = getattr(state, "metadata", None)
 
-    schema_class = get_schema_class(metadata)
-    updates["messages"].append(f"Ingestion node: Selected schema {schema_class.__name__} based on metadata.")
+    # Aseguramos que extracted_text no sea None
+    extracted_text = extracted_text or ""
+
+    # 2. LLAMAMOS A LA FUNCIÓN CENTRALIZADA
+    schema_class = get_schema_class(target_type)
+    updates["messages"].append(f"Ingestion node: Using centralized factory for {schema_class.__name__}.")
 
     if extracted_text.strip():
         updates["messages"].append("Ingestion node: Mapping extracted text to universal feature space (Single Block).")

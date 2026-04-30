@@ -118,6 +118,28 @@ class Legal500Strategy(SubmissionStrategy):
                         clean_strings(d[i])
         clean_strings(context)
 
-        # 6. Build the document
-        template_path = "templates/legal500-us-submissions-template-2026-1-1-2.docx"
+        # ========================================================
+        # 🕵️‍♂️ TRAMPA DE DEBUGGING: TEMPLATE SELECTOR
+        # ========================================================
+        print("\n" + "="*50)
+        print("🕵️‍♂️ DEBUG: TEMPLATE SELECTOR")
+        print("="*50)
+        print(f"1. Tipo de self.config: {type(self.config)}")
+        
+        if isinstance(self.config, dict):
+            print(f"2. Llaves dentro de self.config: {list(self.config.keys())}")
+            print(f"3. Valor de 'template_file' en YAML: {self.config.get('template_file')}")
+        else:
+            print("🚨 ERROR: self.config NO es un diccionario.")
+            
+        print(f"4. Ruta desde donde se inicializó la clase: {self.config_path}")
+        print("="*50 + "\n")
+
+        # 6. Build the document (Dynamic Template Routing)
+        template_filename = self.config.get("template_file", "legal500-us-submissions-template-2026-1-1-2.docx")
+        
+        # Construimos la ruta completa
+        template_path = f"templates/{template_filename}"
+        
+        print(f"--- [ASSEMBLER] Using template: {template_path} ---")
         return assemble_submission(template_path, output_path, context)

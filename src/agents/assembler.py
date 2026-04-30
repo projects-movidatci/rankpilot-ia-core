@@ -3,11 +3,9 @@ import time
 import shutil
 import re
 from src.core.state import AgentState
-from src.strategies.legal500 import Legal500Strategy
-from src.strategies.chambers import ChambersStrategy
 from src.io.base64_encoder import encode_file_to_base64
 from src.io.text_enrichment import convert_all_markdown_to_richtext
-from src.strategies.leaders_league import LeadersLeagueStrategy
+from src.io.strategy_selector import get_strategy
 
 def sanitize_filename(name: str) -> str:
     """Removes invalid characters to make the firm name safe for the file system."""
@@ -31,17 +29,40 @@ def assembly_node(state: AgentState) -> dict:
     else:
         submission_dict = {}
 
-    sub_type = getattr(state, "target_submission_type", "Legal500") or "Legal500"
-
-    if sub_type == "Legal500":
-        strategy = Legal500Strategy()
-    elif sub_type == "Chambers":
-        strategy = ChambersStrategy()
-    elif sub_type == "LeadersLeague":
-        strategy = LeadersLeagueStrategy()
+    # --- 1. Recuperación BLINDADA (Soporta dict y objeto) ---
+    if isinstance(state, dict):
+        sub_type = state.get("target_submission_type", "Legal500")
+        state_config = state.get("config", {})
+        metadata = state.get("metadata", {})
     else:
-        # fallback
-        strategy = Legal500Strategy()
+        sub_type = getattr(state, "target_submission_type", "Legal500")
+        state_config = getattr(state, "config", {}) or {}
+        metadata = getattr(state, "metadata", {}) or {}
+
+    # --- 2. RUTEO DE EMERGENCIA (Si el config se perdió en el camino) ---
+    if not state_config:
+        if hasattr(metadata, "guide"):
+            guide = metadata.guide
+        elif isinstance(metadata, dict):
+            guide = metadata.get("guide", "")
+        else:
+            guide = ""
+            
+        guide = str(guide).lower() if guide else ""
+        
+        from src.io.strategy_selector import get_config_path
+        import yaml
+        config_path = get_config_path(sub_type, guide)
+        print(f"🔥 DEBUG ASSEMBLER: Rescatando YAML desde -> {config_path}")
+        
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                state_config = yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"❌ Error leyendo {config_path} en assembler: {e}")
+
+    # 3. Inicializamos la estrategia con el config REPLETO
+    strategy = get_strategy(sub_type, state_config)
 
     # 1. Extract and sanitize the Firm Name for the file
     raw_firm_name = "Unknown_Firm"
