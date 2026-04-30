@@ -50,6 +50,8 @@ def get_config_path(current_target: str, guide: str) -> str:
             return "configs/legal500_canada.yaml"
         if "Caribbean" in guide or "caribbean" in guide:
             return "configs/legal500_caribbean.yaml"
+        if "Europe" in guide or "Africa" in guide or "europe" in guide or "africa" in guide:
+            return "configs/legal500_emea.yaml"
         else:
             return "configs/legal500_us.yaml" # Fallback por defecto
             

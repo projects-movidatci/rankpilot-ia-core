@@ -1,0 +1,130 @@
+name: "Legal500 US Complete"
+target_submission_type: "Legal500"
+template_file: "legal500-emea-submissions-template-2026.docx"
+
+# ==========================================
+# THE LEGAL 500 EDITORIAL AI BRAIN
+# ==========================================
+copywriting_guidelines: |
+  STRATEGIC EDITORIAL RULES FOR LEGAL 500:
+  Legal 500 rewards "cumulative evidence" and "institutional depth." When rewriting or optimizing this submission, apply the following consultant-validated patterns:
+
+  1. PRIORITIZE VOLUME AND SUBSTANCE: Legal 500 tolerates and often rewards more extensive submissions. Do not shy away from detail. Aim for a sense of an "active and complete" practice. 
+  2. EMPHASIZE THE "PLATFORM" OVER THE "STAR": While individual partners matter, Legal 500 is highly receptive to team depth. Highlight the involvement of multiple partners, counsel, and senior associates to demonstrate a robust, multi-layered platform.
+  3. QUANTITY AS QUALITY: In this directory, having too few publishable_matters can be detrimental. Ensure the narrative reflects a broad portfolio and high deal/matter flow. More evidence generally translates to a stronger sense of market presence.
+  4. NARRATIVE BREADTH WITH ORDER: Use the extra space to develop a more thorough narrative, but keep it structured. Use descriptive content that proves "constancy" and "continuous market activity" rather than just isolated cases of sophistication.
+  5. MULTI-JURISDICTIONAL REACH: Explicitly mention cross-border capabilities and jurisdictional breadth, as Legal 500 favors practices that show wide geographic and functional coverage.
+  6. SUBSTANTIVE AMPLITUDE: Avoid empty marketing fluff. Every extra paragraph must add a new layer of evidence, market shift insight, or client impact.
+
+# ---------------------------------------------------------
+# THE AUDIT RULEBOOK
+# ---------------------------------------------------------
+
+required_fields:
+  # Identity & Contacts
+  - "identity.firm_name"
+  - "identity.country"
+  - "identity.practice_area"
+  - "identity.interview_contacts.0.name"
+  
+  # Department Info & Metrics
+  - "department_info.team_name_internal"
+  - "department_info.heads_of_team.0.name"
+  - "department_info.metrics.partners_count_50_percent_plus"
+  - "department_info.metrics.non_partners_count_50_percent_plus"
+  
+  # Narratives
+  - "narratives.what_sets_us_apart"
+  - "narratives.initiatives_and_innovation"
+  - "narratives.rankings_feedback"
+  
+  # Clients
+  - "clients.0.active_key_client"
+  
+  # Individual Nominations
+  - "individual_nominations.leading_partners.0.name"
+  - "individual_nominations.next_generation_partners.0.name"
+  - "individual_nominations.leading_associates.0.name"
+  
+  # Team Dynamics
+  - "team_dynamics.arrivals_and_departures.0.name"
+  
+  # Work Highlights & Matters
+  - "work_highlights_summaries.0.publishable_summary"
+  - "publishable_matters.0.matter_description"
+  - "publishable_matters.1.matter_description"
+  - "publishable_matters.2.matter_description"
+  - "publishable_matters.3.matter_description"
+  - "publishable_matters.4.matter_description"
+  - "publishable_matters.5.matter_description"
+  - "publishable_matters.6.matter_description"
+  - "publishable_matters.7.matter_description"
+  - "publishable_matters.8.matter_description"
+  - "publishable_matters.9.matter_description"
+  - "publishable_matters.10.matter_description"
+  - "publishable_matters.11.matter_description"
+  - "publishable_matters.12.matter_description"
+  - "publishable_matters.13.matter_description"
+  - "publishable_matters.14.matter_description"
+  - "publishable_matters.15.matter_description"
+  - "publishable_matters.16.matter_description"
+  - "publishable_matters.17.matter_description"
+  - "publishable_matters.18.matter_description"
+  - "publishable_matters.19.matter_description"
+  - "confidential_matters.0.matter_description"
+  - "confidential_matters.1.matter_description"
+  - "confidential_matters.2.matter_description"
+  - "confidential_matters.3.matter_description"
+  - "confidential_matters.4.matter_description"
+  - "confidential_matters.5.matter_description"
+  - "confidential_matters.6.matter_description"
+  - "confidential_matters.7.matter_description"
+  - "confidential_matters.8.matter_description"
+  - "confidential_matters.9.matter_description"
+  - "confidential_matters.10.matter_description"
+  - "confidential_matters.11.matter_description"
+  - "confidential_matters.12.matter_description"
+  - "confidential_matters.13.matter_description"
+  - "confidential_matters.14.matter_description"
+  - "confidential_matters.15.matter_description"
+  - "confidential_matters.16.matter_description"
+  - "confidential_matters.17.matter_description"
+  - "confidential_matters.18.matter_description"
+  - "confidential_matters.19.matter_description"
+fields:
+  firm_name:
+    description: "The official name of the law firm."
+  country:
+    description: "The country for the submission (e.g., 'United States')."
+  practice_area:
+    description: "The specific practice area selected for this submission."
+  interview_contacts:
+    description: "List of contacts designated to arrange interviews, including names, emails, and phone numbers."
+  team_name_internal:
+    description: "The internal name the firm uses for this department."
+  heads_of_team:
+    description: "List of the Head(s) of the Team and their locations."
+  partners_count_50_percent_plus:
+    description: "Number of partners who spend at least 50% of their time in this department."
+  non_partners_count_50_percent_plus:
+    description: "Number of non-partners who spend at least 50% of their time in this department."
+  what_sets_us_apart:
+    description: "Narrative detailing what sets the practice apart from other firms."
+  initiatives_and_innovation:
+    description: "Narrative detailing measures introduced or maintained over the last year to benefit clients."
+  rankings_feedback:
+    description: "The firm's strategic argument regarding their current ranking. If missing, ask the user to provide a persuasive, evidence-based argument justifying why the firm or a specific lawyer deserves to be elevated. Ask them what specific market shifts, recent hires, or complex publishable_matters justify this promotion."
+  active_key_client:
+    description: "The official name of the active key clients, and whether they are publishable."
+  leading_partners:
+    description: "Nominations for genuinely exceptional, pre-eminent partners with supporting information."
+  next_generation_partners:
+    description: "Nominations for junior/new/younger partners making a material difference."
+  leading_associates:
+    description: "Nominations for junior/new/younger associates or counsels making a material difference."
+  arrivals_and_departures:
+    description: "List of significant recent arrivals, departures, or promotions at the partner level."
+  work_highlights_summaries:
+    description: "Up to 3 brief summaries of publishable work highlights."
+  publishable_matters:
+    description: "Detailed descriptions of specific work highlights, deal values, and team members involved."

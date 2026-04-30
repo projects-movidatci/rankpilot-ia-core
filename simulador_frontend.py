@@ -61,7 +61,7 @@ def main():
         "metadata": {
             "firm_name": "Pérez Correa González",  # <--- ¡Añade esto!
             "directory": "Legal500",
-            "guide": "Caribbean",
+            "guide": "Africa, Europe and Middle East",  # <--- Y esto
             "practice_area": "Fintech",
             "jurisdiction": "Mexico"               # <--- Y esto
         },
