@@ -36,6 +36,9 @@ class Identity(BaseModel):
     country: Optional[str] = Field(None, description="The country for the submission (e.g., 'United States').")
     practice_area: Optional[str] = Field(None, description="The specific practice area selected for this submission.")
     interview_contacts: List[InterviewContact] = Field(default_factory=list, description="List of contacts to arrange interviews with.")
+    current_band_status: str = Field(
+        description="CRITICAL STRATEGY FIELD. The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4')."
+    )
 
 # -----------------------------------
 # Department Information (Legal 500)
@@ -180,6 +183,9 @@ class PreliminaryInformation(BaseModel):
     A2_practice_area: Optional[str] = Field(None, description="The specific practice area being submitted for (e.g., 'FinTech Legal').")
     A3_location_jurisdiction: Optional[str] = Field(None, description="The country or jurisdiction the submission applies to.")
     A4_contact_persons: List[ContactPerson] = Field(default_factory=list, description="List of personnel designated to arrange interviews.")
+    current_band_status: str = Field(
+        description="CRITICAL STRATEGY FIELD. The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4')."
+    )
 
 # -----------------------------------
 # Section B: Department Information

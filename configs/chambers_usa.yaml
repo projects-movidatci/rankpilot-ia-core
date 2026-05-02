@@ -26,10 +26,12 @@ copywriting_guidelines: |
 # THE AUDIT RULEBOOK (STRING BASED)
 # ---------------------------------------------------------
 required_fields:
+    # CRITICAL STRATEGY FIELD: The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4').
   # --- SECTION A: Identity ---
   - "A_preliminary_information.A1_firm_name"
   - "A_preliminary_information.A2_practice_area"
   - "A_preliminary_information.A3_location_jurisdiction"
+  - "A_preliminary_information.current_band_status"
   
   # --- SECTION B: Department Info & Headcounts ---
   - "B_department_information.B1_department_name"

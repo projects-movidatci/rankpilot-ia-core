@@ -59,11 +59,11 @@ def main():
     thread_id = str(uuid.uuid4())
     agent_state = {
         "metadata": {
-            "firm_name": "Pérez Correa González",  # <--- ¡Añade esto!
+            "firm_name": "",  # <--- ¡Añade esto!
             "directory": "Legal500",
-            "guide": "Africa, Europe and Middle East",  # <--- Y esto
+            "guide": "Germany", 
             "practice_area": "Fintech",
-            "jurisdiction": "Mexico"               # <--- Y esto
+            "jurisdiction": ""             
         },
         "target_submission_type": "Legal500",
         "input_document_type": input_type,
@@ -141,10 +141,87 @@ def main():
         gaps = agent_state.get("gaps", [])
         
         # CONDICIÓN DE SALIDA
+        # CONDICIÓN DE SALIDA: Cuando ya no hay más preguntas (gaps)
         if not gaps:
+            # 1. Función para normalizar cualquier dato (Pydantic o Dict) a Dict
+            def to_dict(obj):
+                if isinstance(obj, dict):
+                    return obj
+                if hasattr(obj, "model_dump"): # Si es Pydantic v2
+                    return obj.model_dump()
+                if hasattr(obj, "__dict__"): # Fallback para objetos genéricos
+                    return obj.__dict__
+                return {}
+
+            # 2. Extraer y normalizar los bloques clave del estado
+            p_core = to_dict(ia_data.get("positioning_core", {}))
+            p_tier = to_dict(ia_data.get("positioning_tier", {}))
+            s_context = to_dict(ia_data.get("strategic_context", {}))
+
+            # 3. IMPRESIÓN DE CASILLAS ESTRATÉGICAS[cite: 3]
             print_header("🏆 DIAGNÓSTICO ESTRATÉGICO FINAL")
-            print("¡La IA determinó que no hay más brechas de información!")
-            print("El documento final y el resumen ejecutivo están listos.")
+            
+            # Ahora usamos .get() con total seguridad porque todo es un dict
+            print(f" { 'ARQUETIPO':<20} : {p_core.get('practice_model', 'N/A')}")
+            print(f" { 'TIER DETECTADO':<20} : {p_tier.get('label', 'N/A')}")
+            print(f" { 'TARGET':<20} : {s_context.get('realistic_target', 'N/A')}")
+            
+            # Cálculo de confianza con fallback seguro
+            conf = p_core.get('confidence_score', 0)
+            print(f" { 'CONFIANZA':<20} : {float(conf) * 100}%")
+            
+            print_header("🎨 ESTRATEGIA DE NARRATIVA (MAQUILLAJE)")
+            guidelines = p_core.get("narrative_guidelines", "No guidelines generated.")
+            if isinstance(guidelines, list):
+                for g in guidelines: print(f" • {g}")
+            else:
+                print(guidelines)
+
+            print_header("⚖️ JUSTIFICACIÓN DEL TIER")
+            print(p_tier.get("explanation", "Sin justificación disponible."))
+
+            print_header("🕵️‍♂️ SEÑALES DE MERCADO DETECTADAS")
+            signals = p_core.get("signals", [])
+            if signals and isinstance(signals, list):
+                for s in signals: print(f" 🚩 {s}")
+            else:
+                print("No se detectaron señales de respaldo.")
+
+            print_header("📅 ROADMAP DE EVOLUCIÓN")
+            # El roadmap ya suele venir como lista de dicts por el model_dump del nodo[cite: 9]
+            roadmap = ia_data.get("evolution_path", [])
+            for step in roadmap:
+                s = to_dict(step)
+                print(f" [{s.get('target_completion_date', 'TBD')}] {s.get('action_title', 'ACCIÓN').upper()}")
+
+            # --- NUEVA SECCIÓN: EXECUTIVE WRITER FINAL ANALYSIS ---
+            print_header("📝 REPORTE FINAL DEL EXECUTIVE WRITER")
+            exec_summary = to_dict(ia_data.get("executive_summary", {}))
+            
+            if exec_summary:
+                score = exec_summary.get('overall_score', 'N/A')
+                risk = exec_summary.get('risk_level', 'N/A')
+                
+                print(f" 📊 SCORE GLOBAL   : {score}/100")
+                print(f" ⚠️ NIVEL DE RIESGO: {risk.upper() if isinstance(risk, str) else risk}")
+                print(f"\n 💡 VEREDICTO ESTRATÉGICO:\n {exec_summary.get('strategic_verdict', 'Sin veredicto.')}")
+                
+                diffs = exec_summary.get('top_differentiators', [])
+                if diffs and isinstance(diffs, list):
+                    print("\n 🎯 TOP DIFERENCIADORES A EXPLOTAR:")
+                    for d in diffs:
+                        print(f"   • {d}")
+                
+                letter = exec_summary.get('audit_letter_markdown', '')
+                if letter:
+                    print_header("✉️ CARTA DE AUDITORÍA AL DIRECTORIO")
+                    print(letter)
+                else:
+                    print("\n⚠️ La carta de auditoría no se generó o está vacía.")
+            else:
+                print("⚠️ No se encontró el bloque 'executive_summary' en el estado final.")
+
+            print_header("✨ PROCESO COMPLETADO")
             break
             
         # CHAT DE AUDITORÍA

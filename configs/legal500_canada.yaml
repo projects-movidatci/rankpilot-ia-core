@@ -25,6 +25,7 @@ required_fields:
   - "identity.firm_name"
   - "identity.country"
   - "identity.practice_area"
+  - "identity.current_band_status"  # CRITICAL STRATEGY FIELD: The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4').
   - "identity.interview_contacts.0.name"
   
   # Department Info & Metrics

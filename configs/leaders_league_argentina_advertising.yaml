@@ -5,6 +5,7 @@ required_fields:
   # ==========================================
   # 1. FIRM INFORMATION
   # ==========================================
+  
   - field: "firm_information.firm_name"
     description: "The official, registered name of the law firm."
     

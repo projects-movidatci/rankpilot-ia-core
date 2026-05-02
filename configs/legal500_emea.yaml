@@ -25,6 +25,7 @@ required_fields:
   - "identity.firm_name"
   - "identity.country"
   - "identity.practice_area"
+  - "identity.current_band_status"
   - "identity.interview_contacts.0.name"
   
   # Department Info & Metrics

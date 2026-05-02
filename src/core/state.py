@@ -9,6 +9,7 @@ from src.core.schemas import BaseSubmission
 class PositioningCore(BaseModel):
     practice_model: str = ""
     practice_definition: str = ""
+    narrative_guidelines: Union[str, List[str]] = Field(default_factory=list)
     confidence_score: float = 0.0
     signals: List[str] = Field(default_factory=list)
 
@@ -104,6 +105,8 @@ class AgentState(BaseModel):
     next_node: str = "" # Usado por RankPilot para ruteo condicional
     errors: List[str] = Field(default_factory=list)
     config: Dict[str, Any] = Field(default_factory=dict)
+
+    strategic_context: Dict[str, Any] = Field(default_factory=dict)
 
     # ==========================================
     # VALIDADORES (Los Escudos de Producción)

@@ -11,7 +11,6 @@ class MilestoneSchema(BaseModel):
     why_it_matters: str = Field(description="Strategic justification for Tier/Band elevation based on ranking criteria")
     technical_instruction: str = Field(description="Step-by-step 'How-to' for the associate lawyer to execute")
     priority_level: int = Field(description="Integer from 1 (Critical) to 5 (Standard)")
-    # --- CAMBIO: Nueva variable para la fecha exacta ---
     target_completion_date: str = Field(description="Exact formatted calendar date (e.g., 'November 15, 2026') by which this must be completed.")
 
 class SchedulerResponse(BaseModel):
@@ -23,7 +22,7 @@ STRATEGIC_SCHEDULER_PROMPT = ChatPromptTemplate.from_template(
     """
     SYSTEM: 
     You are the "Lead Architect & Project Manager" for International Legal Rankings. 
-    Your mission is to engineer a 5-step strategic roadmap that guarantees a Band 1/Tier 1 evaluation.
+    Your mission is to engineer a 5-step strategic roadmap that guarantees the firm reaches its Realistic Target.
     
     OPERATIONAL CONTEXT:
     - Today's Date: {current_date}
@@ -32,24 +31,32 @@ STRATEGIC_SCHEDULER_PROMPT = ChatPromptTemplate.from_template(
     - Found Gaps: {gaps}
     - Blind Spots: {blind_spots}
     - Evidence: {submission_json}
+    
+    [STRATEGIC DIRECTIVE & MAKEUP]
+    - Realistic Target: {realistic_target}
+    - Firm Archetype: {selected_archetype}
+    - Positioning Strategy (Narrative Guidelines): 
+    {narrative_guidelines}
+    - Tone & Focus: {evaluation_tone}
 
     CHAIN-OF-THOUGHT INSTRUCTIONS:
     1. ANALYZE TEMPORAL URGENCY: Calculate the remaining window between Today's Date and the Deadline. 
-    2. CONTENT VOLUME CHECK: If the matter count is below 20, Step 1 and 2 MUST prioritize "Content Discovery".
-    3. STRATEGIC POSITIONING: Identify the "Market Leader" signal for {practice_area}.
-    4. SEQUENCING: Order steps chronologically from "Heavy Lifting" (Gathering data) to "Surgical Refinement" (Polishing text).
+    2. TARGET & ARCHETYPE ALIGNMENT (CRITICAL): All 5 milestones MUST be explicitly designed to achieve the "{realistic_target}" while perfectly executing the 'Positioning Strategy' for a '{selected_archetype}'. 
+    3. FIXING THE BLIND SPOTS: Ensure at least one milestone directly addresses the structural weaknesses identified in the {blind_spots}.
+    4. SEQUENCING: Order steps chronologically from "Heavy Lifting" (Gathering/Filtering data) to "Surgical Refinement" (Polishing text).
 
     OUTPUT REQUIREMENTS (5 Milestones):
     For each milestone, you MUST provide:
     - CATEGORY: [Strategic Narrative, Quantitative Density, Leadership Balance, or Volume Expansion].
     - ACTION TITLE: A technical, professional headline.
-    - WHY IT MATTERS: Explain the "Tier Elevation" logic.
-    - TECHNICAL INSTRUCTION: A specific "How-to" for the Associate Lawyer.
-    - TARGET COMPLETION DATE: Calculate an exact, formatted calendar date (e.g., 'October 30, 2026') for when this milestone must be completed. Space these dates logically between Today's Date and the Deadline.
+    - WHY IT MATTERS: Explain the logic, explicitly tying it to achieving the {realistic_target} and building the {selected_archetype} narrative.
+    - TECHNICAL INSTRUCTION: A specific, actionable "How-to" for the Associate Lawyer (e.g., "Remove matters under X value", "Rewrite section Y to emphasize cross-border elements").
+    - TARGET COMPLETION DATE: Calculate an exact, formatted calendar date.
     - PRIORITY: 1 (Critical) to 5 (Standard).
 
     STYLE: 
-    Cold, analytical, and authoritative. Use the names of partners and cases found in {submission_json}.
+    Cold, analytical, and authoritative. Match the requested '{evaluation_tone}'. Use the names of partners and cases found in the evidence.
+    
     {format_instructions}
     """
 )

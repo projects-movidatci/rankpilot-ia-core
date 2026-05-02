@@ -1,13 +1,19 @@
 from langchain_core.prompts import ChatPromptTemplate
 from src.core.llm import get_llm
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Union
 from langchain_core.output_parsers import PydanticOutputParser
 
-class PracticeModel(BaseModel):
-    label: str = Field(description="The formal name of the practice type.")
-    definition: str = Field(description="A concise technical definition.")
+# --- 1. ESQUEMA DEL CLASIFICADOR (Enfoque en Maquillaje/Narrativa) ---
+class ArchetypeSelection(BaseModel):
+    selected_archetype: str = Field(description="The exact name of the chosen archetype.")
+    brief_justification: str = Field(description="1 sentence explaining why.")
+    # Aceptamos Union para ser flexibles
+    narrative_guidelines: Union[str, List[str]] = Field(
+        description="3 strategic bullet points. Can be a single string or a list of strings."
+    )
 
+# --- 2. ESQUEMAS DEL SNAPSHOT (Sin cambios estructurales) ---
 class PositioningTier(BaseModel):
     label: str = Field(description="One of: 'Elite', 'Consolidated', or 'Market Member'.")
     explanation: str = Field(description="Professional justification for the assigned tier.")
@@ -16,55 +22,83 @@ class BlindSpot(BaseModel):
     issue: str = Field(description="A short title for the identified gap.")
     description: str = Field(description="A detailed explanation of why this is a risk.")
 
-# --- ACTUALIZADO: Consolidamos todo en el Snapshot Final ---
 class FinalSnapshot(BaseModel):
-    practice_model: PracticeModel = Field(description="The formal name and technical definition.")
     confidence_score: float = Field(description="Value between 0.0 and 1.0 based on evidence depth.")
     signals: List[str] = Field(description="Exactly 3 specific evidence-backed signals (e.g., $$$ values, landmark precedents).")
     positioning_tier: PositioningTier = Field(description="Elite, Consolidated, or Market Member.")
     blind_spots: List[BlindSpot] = Field(description="Exactly 4 high-stakes technical gaps.")
     competitive_advantage: List[str] = Field(description="Top 2 'Elite' signals.")
 
+
+# --- 3. CADENA DEL CLASIFICADOR (Ahora sabe la banda a la que apuntamos) ---
+archetype_parser = PydanticOutputParser(pydantic_object=ArchetypeSelection)
+
+archetype_prompt = ChatPromptTemplate.from_template(
+    """
+    SYSTEM: You are a strategic legal market classifier.
+    Read the following submission data and classify the firm into exactly ONE of the following archetypes:
+    {possible_archetypes}
+    
+    [CONTEXT]
+    - Practice Area: {practice_area}
+    - Realistic Target: {realistic_target} 
+    - Submission Data: {submission_json}
+    
+    [YOUR MISSION]
+    1. Choose the archetype that best matches the firm's actual work.
+    2. Provide a brief justification.
+    3. Generate 3 STRICT 'Narrative Guidelines'.
+    
+    {format_instructions}
+    """
+)
+
+llm_classifier = get_llm(temperature=0.0) 
+archetype_chain = archetype_prompt.partial(format_instructions=archetype_parser.get_format_instructions()) | llm_classifier | archetype_parser
+
+
+# --- 4. CADENA DEL SNAPSHOT (Evalúa qué tan lejos están de esa narrativa ideal) ---
 parser = PydanticOutputParser(pydantic_object=FinalSnapshot)
 
 snapshot_prompt = ChatPromptTemplate.from_template(
     """
     SYSTEM: 
-    You are the "Lead Auditor" for Global Legal Rankings. You are cold, analytical, and impossible to impress. 
-    Your mission is to strip away the marketing fluff and expose the raw technical standing of this submission.
+    You are the "Lead Strategist" for Global Legal Rankings.
+    Your mission is to evaluate the current submission and determine how well it aligns with the ideal strategic narrative.
     
     =========================================
     DIRECTORY-SPECIFIC EVALUATION CRITERIA:
-    You MUST judge this submission against these strict rules:
     {editorial_rules}
     =========================================
     
+    [CRITICAL STRATEGIC CONTEXT]
+    - Realistic Target: {realistic_target}
+    - Evaluation Tone & Directive: {evaluation_tone}
+    
+    [FIRM IDENTITY & IDEAL NARRATIVE]
+    - Archetype: **{selected_archetype}**
+    - Narrative Guidelines (How they SHOULD be positioning themselves):
+    {narrative_guidelines}
+    
     GROUNDING MANDATE: 
     If it is not in the submission_json or history, it DOES NOT EXIST. 
-    Do not hallucinate complexity. If the submission violates the evaluation criteria above (e.g. overclaiming), penalize the tier and add it as a Blind Spot.
 
     AUDIT PARAMETERS:
     - Practice Area: {practice_area}
     - Optimized Submission Data: {submission_json}
-    - Supplemental Evidence (Q&A): {history}
 
-    PHASE 1: THE TECHNICAL CORE
-    - Define the 'Practice Model' based on the complexity of matters. 
-    - Is this 'High-End Specialty', 'Commoditized Service', or 'Strategic Advisory'?
-    - Extract 3 hard evidence signals (deals, precedents, $$$).
+    PHASE 1: THE TECHNICAL CORE 
+    - Extract 3 hard evidence signals (deals, precedents, $$$) that strongly support their {selected_archetype} narrative.
 
     PHASE 2: THE TIER VERDICT
     - Assign a Tier: [Elite / Consolidated / Market Member].
-    - JUSTIFICATION: Compare the evidence against the Directory Criteria. 
+    - JUSTIFICATION: Compare their actual evidence against the {realistic_target}. 
 
-    PHASE 3: THE INVISIBLE RISKS (4 Blind Spots)
-    Identify exactly 4 technical gaps that an investigator would use to reject a Band 1 ranking.
-    Focus on violations of the Directory Criteria, Lack of Quantitative Depth, Missing Friction, or Weak Cohesion.
+    PHASE 3: THE NARRATIVE BLIND SPOTS (4 Points)
+    Identify exactly 4 areas where their current text fails to follow the 'Narrative Guidelines' or the 'Evaluation Tone'. (e.g., Are they hiding their best cases? Are they sounding too generic for their archetype?)
 
     PHASE 4: THE WEAPONS (2 Competitive Advantages)
-    Identify exactly 2 reasons why this firm is a threat to the market based on the evidence.
-
-    TONE: Surgical, objective, authoritative.
+    Identify exactly 2 structural or factual strengths that we can highlight in the final report.
     
     {format_instructions}
     """

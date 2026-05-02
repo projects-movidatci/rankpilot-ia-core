@@ -1,59 +1,96 @@
 from typing import Dict, Any
-from src.core.state import AgentState # <-- Actualizado al estado unificado
+from src.core.state import AgentState
 from src.chains.scheduler_chain import scheduler_chain
 import datetime
 
 def scheduler_node(state: AgentState) -> Dict[str, Any]:
     print("--- [NODE] Executing Strategic Scheduler ---")
-
+    
+    # 1. Recuperamos los objetos del estado
+    core_data = getattr(state, "positioning_core", {})
+    context_data = getattr(state, "strategic_context", {})
+    submission_obj = getattr(state, "submission", None)
     metadata = getattr(state, "metadata", None)
     
-    # Extraer metadata de forma segura
-    submission_deadline = getattr(metadata, "submission_deadline", "No deadline provided") if metadata else "No deadline provided"
+    # --- EXTRACCIÓN AUTÓNOMA DE FIRMA (Desde los esquemas) ---
+    dynamic_firm_name = "La firma"
+    if submission_obj:
+        sub_dict = submission_obj.model_dump() if hasattr(submission_obj, "model_dump") else (submission_obj if isinstance(submission_obj, dict) else {})
+        # Búsqueda inteligente según el esquema (Legal 500, Chambers, o LL)
+        if sub_dict.get("identity"):
+            dynamic_firm_name = sub_dict["identity"].get("firm_name") or "La firma"
+        elif sub_dict.get("A_preliminary_information"):
+            dynamic_firm_name = sub_dict["A_preliminary_information"].get("A1_firm_name") or "La firma"
+        elif sub_dict.get("firm_information"):
+            dynamic_firm_name = sub_dict["firm_information"].get("firm_name") or "La firma"
+
+    # --- EXTRACCIÓN DEL CONTEXTO ESTRATÉGICO ---
+    def get_val(obj, key, default):
+        return obj.get(key, default) if isinstance(obj, dict) else getattr(obj, key, default)
+
+    realistic_target = get_val(context_data, "realistic_target", "Improve Ranking")
+    evaluation_tone = get_val(context_data, "evaluation_tone", "Authoritative")
+    # Sacamos la banda que guardó el selector de estrategia
+    current_band = get_val(context_data, "current_band", "Unknown Band")
+
+    # --- EXTRAER EL CORE DE POSICIONAMIENTO (ARQUETIPO Y MAQUILLAJE) ---
+    selected_archetype = get_val(core_data, "practice_model", "Standard Firm")
+    # Ahora sí sobrevivirá porque ya lo agregamos a Pydantic
+    narrative_guidelines = get_val(core_data, "narrative_guidelines", "Focus on general optimization.")
+
+    # --- RESTO DEL PROCESAMIENTO ---
+    submission_deadline = getattr(metadata, "submission_deadline", "No deadline") if metadata else "No deadline"
     location = getattr(metadata, "location", "Global") if metadata else "Global"
     practice_area = getattr(metadata, "practice_area", "General Law") if metadata else "General Law"
     
-    # Blind spots generados por el snapshot_generator
+    # Formatear Blind Spots
     raw_blind_spots = getattr(state, "blind_spots", [])
     formatted_blind_spots = ""
     for bs in raw_blind_spots:
-        issue = getattr(bs, 'issue', bs.get('issue', 'Unknown Issue') if isinstance(bs, dict) else 'Unknown Issue')
-        desc = getattr(bs, 'description', bs.get('description', '') if isinstance(bs, dict) else '')
-        formatted_blind_spots += f"- {issue}: {desc}\n"
+        issue = getattr(bs, 'issue', bs.get('issue', 'Unknown') if isinstance(bs, dict) else 'Unknown')
+        formatted_blind_spots += f"- {issue}\n"
 
-    # Los gaps del Acto 1 (En este punto deberían ser 0, pero por si acaso hay residuales)
-    raw_gaps = getattr(state, "gaps", [])
-    formatted_gaps = ""
-    if isinstance(raw_gaps, list) and len(raw_gaps) > 0:
-        if isinstance(raw_gaps[0], dict):
-            formatted_gaps = "\n".join([f"- {g.get('field', 'Field')}: {g.get('reason', '')}" for g in raw_gaps])
-        else:
-            formatted_gaps = "\n".join([f"- {g}" for g in raw_gaps])
+    submission_json = submission_obj.model_dump_json() if submission_obj else "{}"
+
+    # --- DEBUG FINAL (AHORA SÍ, ANTES DE LLAMAR AL LLM) ---
+    print("\n" + "🚀" * 30)
+    print("📊 [DEBUG] VALORES FINALES PARA EL PROMPT DEL SCHEDULER")
+    print("-" * 60)
+    print(f" FIRMA (AUTÓNOMA) : {dynamic_firm_name}")
+    print(f" BANDA ACTUAL     : {current_band}")
+    print(f" TARGET (META)    : {realistic_target}")
+    print(f" ARQUETIPO        : {selected_archetype}")
+    
+    print("\n📝 ESTRATEGIA DE NARRATIVA (NARRATIVE GUIDELINES):")
+    if isinstance(narrative_guidelines, list):
+        for i, g in enumerate(narrative_guidelines, 1): print(f"   {i}. {g}")
     else:
-        formatted_gaps = "No structural gaps remaining. Focus entirely on narrative depth."
+        print(f"   {narrative_guidelines}")
+    print("-" * 60)
+    print(f" PROCESANDO CON LLM...")
+    print("🚀" * 30 + "\n")
 
-    # Usamos el JSON del submission ya optimizado como evidencia base
-    submission_obj = getattr(state, "submission", None)
-    raw_text = submission_obj.model_dump_json() if submission_obj else getattr(state, "raw_text", "")
-    submission_json = getattr(state, "submission", None).model_dump_json() if getattr(state, "submission", None) else "{}"
-    current_date = datetime.date.today().strftime("%B %d, %Y") # Ej: October 26, 2023
+    # Inyección final al LLM
     input_data = {
-        "current_date": current_date,
+        "current_date": datetime.date.today().strftime("%B %d, %Y"),
         "submission_deadline": submission_deadline,
         "location": location,
         "practice_area": practice_area,
-        "gaps": formatted_gaps,
+        "gaps": "Focus on narrative depth", 
         "blind_spots": formatted_blind_spots,
         "submission_json": submission_json,
+        "realistic_target": realistic_target,
+        "evaluation_tone": evaluation_tone,
+        "selected_archetype": selected_archetype,
+        "narrative_guidelines": narrative_guidelines,
+        "firm_name": dynamic_firm_name,    
+        "current_band": current_band       
     }
 
     try:
-        print(f"--- [DEBUG] Calling Scheduler LLM ---")
         response = scheduler_chain.invoke(input_data)
-        
         return {
             "evolution_path": [m.model_dump() for m in response.evolution_path],
-            # Manejamos el current_step tanto si es int como str
             "current_step": "scheduler_complete" 
         }
     except Exception as e:
