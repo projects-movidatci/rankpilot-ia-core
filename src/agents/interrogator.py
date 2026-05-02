@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from src.core.state import AgentState
 from src.core.llm import get_llm
+from src.io.strategy_selector import get_strategic_context
 
 class StrategicQuestion(BaseModel):
     question: str = Field(
@@ -23,6 +24,46 @@ def interrogator_node(state: AgentState) -> dict:
 
     if gaps:
         try:
+            # 1. 🛠️ PRIMERO EXTRAEMOS LOS DATOS (¡La línea que faltaba arriba!)
+            submission_data = getattr(state, "submission", None)
+            input_type = getattr(state, "input_document_type", "unknown")
+            
+            first_gap = gaps[0]
+            field = first_gap.get('field', 'unknown')
+            reason = first_gap.get('reason', 'Missing information.')
+
+            # =======================================================
+            # 🧠 EXTRACCIÓN E INYECCIÓN DEL CONTEXTO ESTRATÉGICO
+            # =======================================================
+            if submission_data:
+                dump = submission_data.model_dump(exclude_none=True)
+                # Para la vista en el prompt
+                dump_clean = {k: v for k, v in dump.items() if v and str(v) != "{}" and str(v) != "[]"}
+                current_submission_context = str(dump_clean).replace("{", "{{").replace("}", "}}")
+                submission_dict = dump
+            else:
+                current_submission_context = "No information extracted yet."
+                submission_dict = {}
+
+            # Sacamos el "Límite de velocidad" para el LLM interrogador
+            strat_context = get_strategic_context(submission_dict)
+            current_band = strat_context.get("current_band", "Unknown")
+            realistic_target = strat_context.get("realistic_target", "Improve Ranking")
+            # =======================================================
+
+            # --- DEBUG DEL INTERROGADOR (CEREBRO ESTRATÉGICO) ---
+            print("\n" + "🧠" * 25)
+            print("🕵️‍♂️ [DEBUG INTERROGATOR] INYECCIÓN ESTRATÉGICA AL PROMPT")
+            print("-" * 50)
+            print(f" TARGET FIELD   : {field}")
+            print(f" BANDA DETECTADA: {current_band}")
+            print(f" TARGET REALISTA: {realistic_target}")
+            print("🧠" * 25 + "\n")
+            
+            # Opcional: También agregarlo a los updates para que lo veas en los logs del servidor
+            updates["messages"].append(f"Interrogator Strategy Check -> Band: {current_band} | Target: {realistic_target}")
+            # ----------------------------------------------------
+
             llm = get_llm(temperature=0.2)
             structured_llm = llm.with_structured_output(StrategicQuestion)
 
@@ -36,6 +77,10 @@ def interrogator_node(state: AgentState) -> dict:
                 "[OBJECTIVE]\n"
                 "Conduct a highly efficient, strategic interview to extract necessary information for their directory submission. "
                 "ALWAYS generate exactly ONE clear, targeted question. Do not overwhelm the user with multiple questions at once.\n\n"
+                "[STRATEGIC ALIGNMENT - CRITICAL DIRECTIVE]\n"
+                f"- Firm's Current Status: {current_band}\n"
+                f"- Realistic Target for this submission: {realistic_target}\n"
+                "CRITICAL: DO NOT flatter the firm by suggesting they are a 'Band 1' candidate if their target is lower (e.g., Band 3 or Band 2). "
                 "[THE FORBIDDEN LEXICON - STRICTLY ENFORCED]\n"
                 "You will receive system variables representing missing fields (e.g., 'publishable_matters.0.D3_matter_value' or 'identity.firm_name'). "
                 "THESE ARE INTERNAL DATABASE LABELS FOR YOUR EYES ONLY. UNDER NO CIRCUMSTANCES are you allowed to utter them to the Partner.\n"
