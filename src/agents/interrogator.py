@@ -49,6 +49,7 @@ def interrogator_node(state: AgentState) -> dict:
             strat_context = get_strategic_context(submission_dict)
             current_band = strat_context.get("current_band", "Unknown")
             realistic_target = strat_context.get("realistic_target", "Improve Ranking")
+            evaluation_tone = strat_context.get("evaluation_tone", "Be objective and professional.")
             # =======================================================
 
             # --- DEBUG DEL INTERROGADOR (CEREBRO ESTRATÉGICO) ---
@@ -80,6 +81,7 @@ def interrogator_node(state: AgentState) -> dict:
                 "[STRATEGIC ALIGNMENT - CRITICAL DIRECTIVE]\n"
                 f"- Firm's Current Status: {current_band}\n"
                 f"- Realistic Target for this submission: {realistic_target}\n"
+                f"- Evaluator Persona & Focus: {evaluation_tone}\n"
                 "CRITICAL: DO NOT flatter the firm by suggesting they are a 'Band 1' candidate if their target is lower (e.g., Band 3 or Band 2). "
                 "[THE FORBIDDEN LEXICON - STRICTLY ENFORCED]\n"
                 "You will receive system variables representing missing fields (e.g., 'publishable_matters.0.D3_matter_value' or 'identity.firm_name'). "
@@ -142,6 +144,22 @@ def interrogator_node(state: AgentState) -> dict:
             is_matter_request = "matters" in field.lower()
             matter_instruction = ""
 
+            # --- NUEVO: DETECCIÓN DE CONFIDENCIALIDAD ---
+            confidentiality_instruction = ""
+            if "confidential" in field.lower():
+                confidentiality_instruction = (
+                    "\n\n[CRITICAL CONFIDENTIALITY MANDATE]\n"
+                    "Since the target field is for a CONFIDENTIAL matter, you MUST explicitly assure the Partner "
+                    "that the information they provide will be kept strictly confidential, used ONLY for the directory's "
+                    "internal panel evaluation, and will NEVER be published."
+                )
+            elif "publishable" in field.lower():
+                confidentiality_instruction = (
+                    "\n\n[PUBLISHABLE MANDATE]\n"
+                    "Since the target field is for a PUBLISHABLE matter, gently remind the Partner that this "
+                    "information will be part of the public record."
+                )
+
             if is_matter_request:
                 try:
                     index = int(field.split(".")[1]) + 1 
@@ -197,16 +215,22 @@ def interrogator_node(state: AgentState) -> dict:
                     "--- INTERNAL SYSTEM TARGET (DO NOT SAY THIS OUT LOUD) ---\n"
                     "Target Field needed: {field}\n"
                     "Reason: {reason}\n\n"
+                    "{matter_instruction}\n" # 👈 INYECTADO AQUÍ
+                    "{confidentiality_instruction}\n\n" # 👈 INYECTADO AQUÍ
                     "--- YOUR TASK (THE FAN SERVICE HOOK) ---\n"
                     "1. The Partner just submitted their initial draft for your review.\n"
-                    "2. Start with a 1-2 sentence strategic mini-audit: Validate their work. Explicitly mention a specific strength, impressive client, or standout matter you see in the 'Extracted Firm Data' to prove you read it and are impressed.\n"
-                    "3. Make them feel recognized as a top-tier firm.\n"
+                    "2. Start with a 1-2 sentence strategic mini-audit: Validate their work against the '{realistic_target}'. Explicitly mention a specific strength, impressive client, or standout matter you see in the 'Extracted Firm Data'.\n"
+                    "3. KEEP TONE REALISTIC. Do not promise Band 1 if that is not the target.\n"
                     "4. Then, seamlessly pivot to ask for the missing information. Remember the FORBIDDEN LEXICON: translate '{field}' into a natural, strategic question."
                 )
                 prompt_vars = {
                     "field": field,
                     "reason": reason,
-                    "current_submission_context": current_submission_context
+                    "current_submission_context": current_submission_context,
+                    "realistic_target": realistic_target,
+                    "evaluation_tone": evaluation_tone,
+                    "matter_instruction": matter_instruction, # 👈 PASADO AQUÍ
+                    "confidentiality_instruction": confidentiality_instruction # 👈 PASADO AQUÍ
                 }
 
             elif is_first_interaction:
@@ -215,11 +239,21 @@ def interrogator_node(state: AgentState) -> dict:
                     "--- INTERNAL SYSTEM TARGET (DO NOT SAY THIS OUT LOUD) ---\n"
                     "Target Field needed: {field}\n"
                     "Reason: {reason}\n\n"
+                    "{matter_instruction}\n" # 👈 INYECTADO AQUÍ
+                    "{confidentiality_instruction}\n\n" # 👈 INYECTADO AQUÍ
                     "--- YOUR TASK ---\n"
-                    "Give a warm, brief, and highly professional welcome to the strategy session. "
-                    "Then, smoothly ask the Partner to provide the information needed to lay the foundation of our submission. Remember the FORBIDDEN LEXICON: translate '{field}' into a natural human question."
+                    "1. Give a brief, highly professional welcome to the strategy session.\n"
+                    "2. Adapt your welcome to the following persona: {evaluation_tone}\n"
+                    "3. Smoothly ask the Partner to provide the information needed to lay the foundation of our submission.\n"
+                    "4. Remember the FORBIDDEN LEXICON: translate '{field}' into a natural human question."
                 )
-                prompt_vars = {"field": field, "reason": reason}
+                prompt_vars = {
+                    "field": field, 
+                    "reason": reason,
+                    "evaluation_tone": evaluation_tone,
+                    "matter_instruction": matter_instruction, # 👈 PASADO AQUÍ
+                    "confidentiality_instruction": confidentiality_instruction # 👈 PASADO AQUÍ
+                }
 
             else:
                 # RAMA 3: EN MEDIO DE LA REUNIÓN (CONVERSACIÓN ACTIVA)
@@ -236,6 +270,7 @@ def interrogator_node(state: AgentState) -> dict:
                     "Target Field needed: {field}\n"
                     "Reason: {reason}\n\n"
                     "{matter_instruction}\n\n"
+                    "{confidentiality_instruction}\n\n"
                     "--- YOUR TASK (STRICT RULES) ---\n"
                     "1. DO NOT GREET THE PARTNER. The meeting has been going on for a while.\n"
                     "2. CLARIFICATION & ACTIVE LISTENING: If the Partner's Input is a question or shows confusion (e.g. asking 'What do you mean?'), YOU MUST ANSWER THEIR QUESTION directly and briefly based on directory standards. Do this FIRST.\n"
@@ -247,9 +282,12 @@ def interrogator_node(state: AgentState) -> dict:
                     "field": field,
                     "reason": reason,
                     "current_submission_context": current_submission_context,
+                    "realistic_target": realistic_target,
+                    "evaluation_tone": evaluation_tone,
                     "conversation_history": conversation_history,
                     "previous_answer_text": previous_answer_text,
-                    "matter_instruction": matter_instruction
+                    "matter_instruction": matter_instruction,
+                    "confidentiality_instruction": confidentiality_instruction
                 }
 
             prompt = ChatPromptTemplate.from_messages([

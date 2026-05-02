@@ -79,12 +79,12 @@ def get_strategic_context(submission_dict: dict) -> dict:
     # 2. TARGET REALISTA Y POSICIÓN DE PARTIDA (Crecimiento Escalona a Escalón)
     if "unranked" in status_lower or "no rank" in status_lower or "preliminary" in status_lower or "spotlight" in status_lower:
         target = "Entry-level (Break into Band 4 or Band 3)"
-        tone = "Evaluate strictly as an Entry Candidate. Do not look for market dominance; look for baseline credibility, institutional clients, and solid mid-market execution."
+        tone = "Evaluate strictly as an Entry Candidate aiming to break into Band 4 or Band 3. Do not look for market dominance; look for baseline credibility, institutional clients, and solid mid-market execution."
     elif "5" in status_lower or "4" in status_lower:
         target = "Mid-Tier Push (Solidify position and push for Band 3)"
-        tone = "Evaluate for Mid-Tier advancement. Focus on consistency, institutional stability, and upward momentum. Penalize commoditized volume."
+        tone = "Evaluate for Mid-Tier advancement, specifically pushing for Band 3. Focus on consistency, institutional stability, and upward momentum. Penalize commoditized volume."
     elif "3" in status_lower:
-        # ¡AQUÍ ESTÁ LA CORRECCIÓN! Ya no empujamos a Band 1, solo a Band 2.
+        # Ya no empujamos a Band 1, solo a Band 2.
         target = "Upper-Mid Tier Push (Consolidate Band 3 and target Band 2)"
         tone = "Evaluate as an ascending firm targeting Band 2. Look for growing complexity and signs they are competing with Band 2 incumbents. Do NOT force Band 1 elite standards yet; keep expectations realistic for a Band 2 push."
     elif "2" in status_lower:
@@ -92,7 +92,7 @@ def get_strategic_context(submission_dict: dict) -> dict:
         tone = "Evaluate as an Elite Challenger targeting Band 1. The standard is absolute excellence. Look for market-shaping precedents and evidence of stealing market share from Band 1 incumbents."
     elif "1" in status_lower:
         target = "Defensive Leadership (Protect Band 1)"
-        tone = "Evaluate as Defensive Leadership. Be ruthless and nitpicky. Do not accept anything less than flagship, bet-the-company matters."
+        tone = "Evaluate as Defensive Leadership protecting a Band 1 ranking. Be ruthless and nitpicky. Do not accept anything less than flagship, bet-the-company matters."
     else:
         target = "General Advancement (Improve current standing)"
         tone = "Evaluate objectively based on the provided evidence, identifying the next logical tier of progression."
