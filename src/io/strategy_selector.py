@@ -37,6 +37,7 @@ def get_config_path(current_target: str, guide: str) -> str:
         if "Caribbean" in guide or "caribbean" in guide: return "configs/legal500_caribbean.yaml"
         if "Germany" in guide or "germany" in guide: return "configs/legal500_germany.yaml"
         if "Latin America" in guide or "latin america" in guide: return "configs/legal500_latin_america.yaml"
+        if "UK" in guide or "uk" in guide or "United Kingdom" in guide or "united kingdom" in guide: return "configs/legal500_uk.yaml"
         if "Europe" in guide or "Africa" in guide or "europe" in guide or "africa" in guide: return "configs/legal500_emea.yaml"
         else: return "configs/legal500_us.yaml"
     elif current_target == "Chambers":

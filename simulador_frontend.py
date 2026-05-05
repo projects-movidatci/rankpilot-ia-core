@@ -61,7 +61,7 @@ def main():
         "metadata": {
             "firm_name": "",  # <--- ¡Añade esto!
             "directory": "Legal500",
-            "guide": "Germany", 
+            "guide": "United Kingdom", 
             "practice_area": "Fintech",
             "jurisdiction": ""             
         },
