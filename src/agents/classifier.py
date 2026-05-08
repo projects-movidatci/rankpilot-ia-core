@@ -1,34 +1,51 @@
 import os
 import yaml
+import traceback
+from typing import Literal
+from pydantic import BaseModel, Field
+
 from src.core.state import AgentState
 from src.io.base64_handler import decode_base64_document
 from src.io.pdf_parser import extract_text_from_pdf
 from src.io.docx_manager import extract_text_from_docx
 from src.core.llm import get_llm
 from src.io.strategy_selector import get_config_path
-from pydantic import BaseModel, Field
-import traceback
 
-class ClassificationResult(BaseModel):
-    input_document_type: str = Field(description="The identified type of the document (e.g. 'Legal500', 'Chambers', 'Other').")
+# Importamos LangChain para la clasificación
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from src.core.llm import get_llm_2
+
+# =========================================================
+# ESQUEMA PYDANTIC PARA CLASIFICACIÓN 1:1
+# =========================================================
+class DocumentClassification(BaseModel):
+    document_type: Literal[
+        "chambers_submission", 
+        "legal500_submission", 
+        "leadersleague_submission", 
+        "unknown_draft"
+    ] = Field(
+        description="Identifica el tipo de documento de directorio legal basado en sus etiquetas, títulos o estructura."
+    )
+    confidence_score: float = Field(
+        description="Nivel de confianza en esta clasificación, de 0.0 a 1.0."
+    )
 
 def classification_node(state: AgentState) -> dict:
     """
     Preparation Node (Formerly Classification):
-    Extracts raw text from Laravel and any uploaded base64 documents.
-    Bypasses LLM classification since Laravel provides the target_submission_type.
+    Extracts raw text from Laravel and uploaded documents, then classifies
+    the actual document type using an LLM to prevent formatting mismatches.
     """
     updates = {"current_step": "preparation", "messages": []}
 
-    # ==========================================
-    # LOG DE PRUEBA EXTREMA
-    # ==========================================
-    updates["messages"].append("ALERTA ROJA: ESTOY LEYENDO EL NUEVO CODIGO")
+    updates["messages"].append("ALERTA ROJA: ESTOY LEYENDO EL NUEVO CODIGO CON CLASIFICADOR IA")
 
     decoded_file_paths = getattr(state, "decoded_file_paths", []) or []
     b64_docs = getattr(state, "base64_documents", [])
-    
     extracted_text = getattr(state, "extracted_text", "") or ""
+    
     if extracted_text.strip():
         updates["messages"].append("Preparation node: Successfully received raw text from Laravel.")
 
@@ -48,120 +65,109 @@ def classification_node(state: AgentState) -> dict:
 
     # 3. Extract text from documents and append it to the raw text
     for file_path in decoded_file_paths:
-        if not file_path:
-            updates["messages"].append("Debug: file_path is empty or None.")
+        if not file_path or not os.path.exists(file_path):
             continue
 
-        updates["messages"].append(f"Debug: Starting extraction for file: {file_path}")
-
-        # Sospechoso 1 y 2: ¿El archivo realmente existe en el disco duro y tiene peso?
-        if not os.path.exists(file_path):
-            updates["messages"].append(f"Debug ERROR: The file does not exist on disk at {file_path}")
-            continue
-            
         file_size = os.path.getsize(file_path)
-        updates["messages"].append(f"Debug: File size on disk is {file_size} bytes.")
-        
         if file_size == 0:
-            updates["messages"].append("Debug ERROR: File is 0 bytes. Base64 decoding failed!")
             continue
 
         ext = os.path.splitext(file_path)[1].lower()
-        
         if ext == '.pdf':
-            updates["messages"].append("Debug: Calling extract_text_from_pdf()...")
             try:
-                # Sospechoso 3: Capturamos cualquier error interno de tu pdf_parser
                 text = extract_text_from_pdf(file_path)
-                
-                # Sospechoso 4: Verificamos qué demonios nos devolvió la función
-                if text is None:
-                    updates["messages"].append("Debug WARNING: extract_text_from_pdf returned None.")
-                elif text.strip() == "":
-                    updates["messages"].append("Debug WARNING: extract_text_from_pdf returned an empty string. Is it a scanned PDF (image)?")
-                else:
-                    updates["messages"].append(f"Debug SUCCESS: Extracted {len(text)} characters from PDF.")
+                if text and text.strip() != "":
                     extracted_text += f"\n--- Content from {os.path.basename(file_path)} ---\n{text}"
-                    
             except Exception as e:
-                error_trace = traceback.format_exc()
                 updates["messages"].append(f"Debug EXCEPTION in extract_text_from_pdf: {str(e)}")
-                print(f"Detailed Error: {error_trace}") # Esto saldrá en la terminal de Python
 
         elif ext == '.docx':
-            # Puedes hacer lo mismo para docx si quieres
-            text = extract_text_from_docx(file_path)
-            if text:
-                extracted_text += f"\n--- Content from {os.path.basename(file_path)} ---\n{text}"
+            try:
+                text = extract_text_from_docx(file_path)
+                if text:
+                    extracted_text += f"\n--- Content from {os.path.basename(file_path)} ---\n{text}"
+            except Exception as e:
+                updates["messages"].append(f"Debug EXCEPTION in extract_text_from_docx: {str(e)}")
 
-    # 4. Update the state with paths and the beautifully merged extracted text
     updates["decoded_file_paths"] = decoded_file_paths
     updates["extracted_text"] = extracted_text
+    updates["messages"].append(f"Extraction complete. Total length: {len(extracted_text)} chars.") 
 
-    updates["messages"].append(f"Extraction complete. Total extracted text length is {len(extracted_text)} characters.") 
+    # =========================================================
+    # DEBUG: CLASIFICACIÓN CON VISIBILIDAD MEJORADA
+    # =========================================================
+    if extracted_text.strip():
+        # Aumentamos a 8000 caracteres porque las portadas de firmas 
+        # suelen tener mucho texto legal antes de las etiquetas B4/B7
+        text_excerpt = extracted_text[:8000] 
+        
+        # LOG DE CONSOLA: Para que veas qué está recibiendo la IA
+        print(f"\n--- [DEBUG CLASSIFIER] TEXTO RECIBIDO (Primeros 300 chars) ---")
+        print(f"{text_excerpt[:300]}...")
+        print(f"-----------------------------------------------------------\n")
 
-    # Trust Laravel's input for the document type
+        try:
+            llm = get_llm_2(temperature=0)
+            structured_llm = llm.with_structured_output(DocumentClassification)
+            
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", (
+                    "You are a legal directory expert. Identify the document type by structural patterns:\n\n"
+                    "- CHAMBERS: Look for tags like 'A.1', 'B.4', 'B.7', 'B.20', 'D. Publishable', 'E. Confidential'.\n"
+                    "- LEGAL 500: Look for 'What sets us apart', 'Individual Nominations', 'Next Generation Partners'.\n"
+                    "- LEADERS LEAGUE: Look for 'Firm Information', 'Peer Feedback', '10 Work Highlights'.\n\n"
+                    "Even if B.4 is replaced by B.7, identify it as 'chambers_submission' if the context matches."
+                )),
+                ("user", "Classify this document:\n\n{text_excerpt}")
+            ])
+            
+            chain = prompt | structured_llm
+            res = chain.invoke({"text_excerpt": text_excerpt})
+            
+            # LOG DE CONSOLA: Ver el veredicto de la IA
+            print(f"🤖 IA Veredicto: {res.document_type} (Confianza: {res.confidence_score})")
+
+            # Bajamos el umbral a 0.70 para ser más tolerantes a cambios de región
+            if res.confidence_score >= 0.70:
+                updates["input_document_type"] = res.document_type
+                updates["messages"].append(f"✅ IA identificó: {res.document_type}")
+            else:
+                updates["input_document_type"] = "unknown_draft"
+                updates["messages"].append(f"⚠️ Baja confianza ({res.confidence_score}): unknown_draft")
+                
+        except Exception as e:
+            print(f"❌ Error en LLM Classifier: {e}")
+            updates["input_document_type"] = "unknown_draft"
+    else:
+        updates["input_document_type"] = "text"
+
+    # =========================================================
+    # LIMPIEZA DE METADATA Y CONFIG (YAML)
+    # =========================================================
     current_target = getattr(state, "target_submission_type", None)
     if current_target:
         current_target = current_target.replace(" ", "")
-
-    if not current_target:
+    else:
         current_target = "Legal500"
-        updates["messages"].append("Preparation node: No target_submission_type provided. Defaulting to Legal500.")
     
     updates["target_submission_type"] = current_target
 
-    # =========================================================
-    # NEW: DYNAMIC REGIONAL ROUTING (Centralized Factory)
-    # =========================================================
-    
-    # 1. Recuperación BLINDADA de metadata (Soporta dict de servidor y objeto local)
-    if isinstance(state, dict):
-        metadata = state.get("metadata", {})
-    else:
-        metadata = getattr(state, "metadata", {}) or {}
-    
-    # 2. Extracción segura del Guide
-    if hasattr(metadata, "guide"):
-        guide = metadata.guide
-    elif isinstance(metadata, dict):
-        guide = metadata.get("guide", "")
-    else:
-        guide = ""
-        
+    # Recuperación de Guide y Configuración
+    metadata = getattr(state, "metadata", {}) or {}
+    guide = getattr(metadata, "guide", "") if hasattr(metadata, "guide") else metadata.get("guide", "")
     guide = str(guide).lower() if guide else ""
     
-    # 3. Obtenemos la ruta del YAML usando nuestra utilidad unificada
     config_path = get_config_path(current_target, guide)
-
-    updates["messages"].append(f"Preparation node: Routing to {config_path} based on target '{current_target}' and guide '{guide}'.")
     
-    # 4. Cargamos el YAML al estado para que viaje al Ensamblador
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
-            
-            if not yaml_config:
-                print(f"⚠️ Warning: El archivo {config_path} está vacío.")
-                yaml_config = {}
-                
-            updates["config"] = yaml_config # ¡AQUÍ ESTÁ LA CLAVE PARA EL ENSAMBLADOR!
-            
-            print(f"✅ YAML cargado exitosamente. Llaves encontradas: {list(yaml_config.keys())}")
-            updates["messages"].append(f"Preparation node: Loaded config from {config_path}")
-            
+            updates["config"] = yaml_config or {}
+            updates["messages"].append(f"Preparation node: Loaded config {config_path}")
     except Exception as e:
-        print(f"❌ Error crítico leyendo {config_path}: {e}")
+        print(f"❌ Error cargando YAML: {e}")
         updates["config"] = {}
-        updates["messages"].append(f"Preparation node Error: Could not load {config_path}")
 
-    # 5. Mapeo final del input_doc_type
-    if isinstance(state, dict):
-        input_doc_type = state.get("input_document_type", None)
-    else:
-        input_doc_type = getattr(state, "input_document_type", None)
-        
-    if not input_doc_type:
-        updates["input_document_type"] = "text"
+    # ELIMINADO: El bloque duplicado que cargaba el YAML por segunda vez
 
     return updates

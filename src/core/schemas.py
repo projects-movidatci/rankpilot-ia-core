@@ -208,16 +208,37 @@ class HireDeparture(BaseModel):
     from_or_destination_firm: Optional[str] = Field(None, description="The name of the previous firm (if joined) or destination firm (if departed).")
 
 class DepartmentInfoFeature(BaseModel):
-    B1_department_name: Optional[str] = Field(None, description="The internal name the firm uses for this specific department.")
+    department_name: Optional[str] = Field(None, description="The internal name the firm uses. Usually labeled as B.1")
     B2_partners: Optional[PartnerStats] = Field(None, description="Total number and gender ratio of partners in the department.")
     B3_other_qualified_lawyers: Optional[PartnerStats] = Field(None, description="Total number and gender ratio of other qualified lawyers (associates, counsels).")
     B4_department_heads: List[ContactPerson] = Field(default_factory=list, description="List of Department Head(s) or Key Partners (USA Template).")
     B5_diversity_lgbt_percentage: Optional[str] = Field(None, description="Percentage of the team identifying as LGBT+. Must be a raw number/percentage string. Return null if blank.")
     B6_diversity_disability_percentage: Optional[str] = Field(None, description="Percentage of the team with a disability. Must be a raw number/percentage string. Return null if blank.")
-    B7_heads_of_department: List[ContactPerson] = Field(default_factory=list, description="List of the Heads of the Department.")
-    B8_hires_departures_last_12_months: List[HireDeparture] = Field(default_factory=list, description="List of partners who joined or left the firm in the last 12 months.")
+    heads_of_department: List[ContactPerson] = Field(
+        default_factory=list, 
+        description=(
+            "CRITICAL: Look for the section identifying the leaders of the practice. "
+            "It is usually titled 'B4 Department Head(s) or Key Partners' OR 'B7 Head or Heads of department'. "
+            "Ignore the B4/B7 numbering and look for the keywords 'Head' and 'Department'. "
+            "The data will likely be a flattened table containing Names, Emails, and Phone numbers. "
+            "Extract every person listed in this specific section."
+        )
+    )
+    hires_departures_last_12_months: List[HireDeparture] = Field(
+        default_factory=list, 
+        description="List of partners who joined or left. Usually labeled as B.8 or similar."
+    )
     B9_lawyers_ranked_unranked: List[DepartmentLawyersRanked] = Field(default_factory=list, description="Details regarding ranked and unranked lawyers, including their key areas of focus and standout work.")
-    B10_department_best_known_for: Optional[str] = Field(None, description="A narrative summary of what the department is best known for. Include industry sector expertise, recent growth, and market disruptor status. Extract the full block of text.")
+    department_best_known_for: Optional[str] = Field(
+        None, 
+        description=(
+            "Narrative text describing what the department is best known for. "
+            "Note: This is typically labeled as 'B7' or 'B10'. "
+            "It should include details on industry sector expertise, key types of work, "
+            "areas of recent growth, and any feedback on previous Chambers coverage. "
+            "Maximum word count is usually 500 words."
+        )
+    )
 
 # -----------------------------------
 # Section C: Feedback

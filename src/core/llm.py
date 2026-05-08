@@ -58,3 +58,36 @@ def get_llm(temperature: float = 0.2, updates: dict = None):
         }
 
         return ChatOpenAI(**kwargs)
+    
+def get_llm_2(temperature: float = 0.0, updates: dict = None):
+    """
+    Específica para el Classifier Node.
+    Usa gpt-4o-mini en local (vía OpenRouter) y en producción.
+    """
+    environment = os.getenv("ENVIRONMENT", "production").lower()
+    
+    if environment == "local":
+        api_key = os.getenv("OPENROUTER_API_KEY", "missing-key")
+        if updates is not None and "messages" in updates:
+            updates["messages"].append("LLM Factory 2: Routing to OpenRouter (openai/gpt-4o-mini)")
+            
+        return ChatOpenAI(
+            model="openai/gpt-4o-mini", # OpenRouter requiere el prefijo
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            temperature=temperature,
+            default_headers={
+                "HTTP-Referer": os.getenv("OPENROUTER_REFERER", "http://localhost:8000"),
+                "X-Title": os.getenv("OPENROUTER_TITLE", "RankPilot Classifier"),
+            }
+        )
+    else:
+        api_key = os.getenv("OPENAI_API_KEY", "missing-key")
+        if updates is not None and "messages" in updates:
+            updates["messages"].append("LLM Factory 2: Routing to OpenAI Native (gpt-4o-mini)")
+
+        return ChatOpenAI(
+            model="gpt-4o-mini",
+            api_key=api_key,
+            temperature=temperature
+        )

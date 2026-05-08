@@ -11,6 +11,8 @@ from src.agents.auditor import audit_node
 from src.agents.interrogator import interrogator_node
 from src.agents.answer_evaluator import process_answer_node 
 from src.agents.scheduler import scheduler_node
+from src.agents.chambers_ingestion import chambers_ingestion_node
+from src.agents.legal500_ingestion import legal500_ingestion_node
 
 # --- ACTO 2: Pulido y Ensamblaje (NUEVO) ---
 # Usaremos un placeholder para importarlo cuando lo creemos
@@ -47,6 +49,34 @@ def route_after_audit(state: AgentState) -> Literal["interrogator_node", "optimi
     # 0 Gaps: El submission está "crudo" pero completo. ¡A optimizar!
     return "optimize_node"
 
+def route_after_classification(state: AgentState) -> Literal["chambers_ingestion_node", "legal500_ingestion_node", "generic_ingestion_node"]:
+    # 1. Obtenemos el tipo detectado por la IA
+    # Si usamos 'updates' en el nodo, LangGraph lo mete al state para el siguiente paso.
+    doc_type = getattr(state, "input_document_type", "unknown_draft")
+    
+    # 2. Obtenemos lo que marcó el usuario (Metadata)
+    metadata = getattr(state, "metadata", None)
+    target_directory = ""
+    if metadata:
+        target_directory = str(getattr(metadata, "directory", "") or "").lower()
+
+    # ==========================================
+    # LOGS DE DIAGNÓSTICO (Míralos en la consola)
+    # ==========================================
+    print(f"\n--- DEBUG ROUTER ---")
+    print(f"🤖 IA DETECTÓ (doc_type): '{doc_type}'")
+    print(f"👤 USUARIO ELIGIÓ (target_directory): '{target_directory}'")
+    print(f"--------------------\n")
+
+    # REGLA CHAMBERS
+    if doc_type == "chambers_submission" and "chambers" in target_directory:
+        return "chambers_ingestion_node"
+
+    # REGLA LEGAL 500
+    elif doc_type == "legal500_submission" and ("legal" in target_directory or "500" in target_directory):
+        return "legal500_ingestion_node"
+
+    return "generic_ingestion_node"
 
 def build_workflow() -> StateGraph:
     """
@@ -59,7 +89,9 @@ def build_workflow() -> StateGraph:
     # ------------------------------------------
     # Acto 1
     workflow.add_node("classification_node", classification_node)
-    workflow.add_node("ingestion_node", ingestion_node)
+    workflow.add_node("chambers_ingestion_node", chambers_ingestion_node)
+    workflow.add_node("legal500_ingestion_node", legal500_ingestion_node)
+    workflow.add_node("generic_ingestion_node", ingestion_node)
     workflow.add_node("process_answer_node", process_answer_node)
     workflow.add_node("sanitizer_node", sanitizer_node)
     workflow.add_node("audit_node", audit_node)
@@ -88,8 +120,23 @@ def build_workflow() -> StateGraph:
     )
 
     # --- ACTO 1: EL BUCLE DE CAPTURA ---
-    workflow.add_edge("classification_node", "ingestion_node")
-    workflow.add_edge("ingestion_node", "sanitizer_node")
+    
+    # ¡NUEVO! Conectamos el clasificador con los extractores usando tu enrutador
+    workflow.add_conditional_edges(
+        "classification_node",
+        route_after_classification,
+        {
+            "chambers_ingestion_node": "chambers_ingestion_node",
+            "legal500_ingestion_node": "legal500_ingestion_node",
+            "generic_ingestion_node": "generic_ingestion_node"
+        }
+    )
+
+    # Los 3 extractores convergen en el sanitizer
+    workflow.add_edge("chambers_ingestion_node", "sanitizer_node")
+    workflow.add_edge("legal500_ingestion_node", "sanitizer_node")
+    workflow.add_edge("generic_ingestion_node", "sanitizer_node")
+    
     workflow.add_edge("process_answer_node", "sanitizer_node")
     workflow.add_edge("sanitizer_node", "audit_node")
 
@@ -105,20 +152,12 @@ def build_workflow() -> StateGraph:
     workflow.add_edge("interrogator_node", END) # Laravel toma el control aquí
 
     # --- ACTO 2: GHOSTWRITER Y ENSAMBLAJE ---
-    # El optimizador reescribe los textos crudos en lenguaje "Band 1"
     workflow.add_edge("optimize_node", "assembly_node")
-    
-    # El ensamblador crea el DOCX y lo guarda en output_base64
     workflow.add_edge("assembly_node", "snapshot_generator_node")
-
-    # RankPilot evalúa el documento y saca Fortalezas y Debilidades (Blind spots)
     workflow.add_edge("snapshot_generator_node", "scheduler_node")
 
     # --- ACTO 3: DIAGNÓSTICO ESTRATÉGICO ---
-    # RankPilot evalúa el documento final y saca el Score, Fortalezas y Debilidades
     workflow.add_edge("scheduler_node", "executive_writer_node")
-    
-    # Fin del proceso. Laravel recibe el JSON final con el Score, el Veredicto y el DOCX.
     workflow.add_edge("executive_writer_node", END)
 
     return workflow.compile()

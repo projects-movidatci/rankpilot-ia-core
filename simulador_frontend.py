@@ -60,12 +60,12 @@ def main():
     agent_state = {
         "metadata": {
             "firm_name": "",  # <--- ¡Añade esto!
-            "directory": "Legal500",
-            "guide": "United Kingdom", 
+            "directory": "Chambers",
+            "guide": "USA", 
             "practice_area": "Fintech",
             "jurisdiction": ""             
         },
-        "target_submission_type": "Legal500",
+        "target_submission_type": "Chambers",
         "input_document_type": input_type,
         "base64_documents": base64_docs,
         "raw_input_text": raw_text,

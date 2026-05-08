@@ -5,7 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.core.state import AgentState
 from src.core.llm import get_llm
 from src.core.schemas import ChambersSubmission, Legal500Submission, LeadersLeagueSubmission
-
+from src.io.strategy_selector import get_strategic_context
 # --- STRUCTURED OUTPUT MODELS ---
 class CleanedField(BaseModel):
     field_key: str = Field(description="The exact key/path of the field being cleaned.")
@@ -75,6 +75,13 @@ def sanitizer_node(state: AgentState) -> dict:
     taml_config = getattr(state, "config", {}) or {}
     custom_guidelines = taml_config.get("copywriting_guidelines", "No additional guidelines provided.")
 
+    # 1. GENERAR CONTEXTO ESTRATÉGICO DINÁMICO
+    # Combinamos la data actual con la configuración del YAML[cite: 9, 10]
+    config = getattr(state, "config", {}) or {}
+    strat_context = get_strategic_context(submission_dict)
+    # Aquí inyectamos las reglas del YAML y el tono de la estrategia[cite: 9, 10]
+    editorial_guidelines = config.get("copywriting_guidelines", "Follow professional legal standards.")
+
     llm = get_llm(temperature=0.3)
     # Importante: Algunos modelos requieren max_tokens explícito para salidas largas
     if hasattr(llm, "max_tokens"):
@@ -83,20 +90,37 @@ def sanitizer_node(state: AgentState) -> dict:
     structured_llm = llm.with_structured_output(SanitizationBatch)
 
     system_prompt = (
-        "You are an elite Legal Copywriter and Strategist working for a top-tier law firm.\n"
-        "Your job is to transform raw, messy notes into persuasive, professional, partner-level prose.\n\n"
+        "You are an elite Legal Copywriter and Strategist for top-tier law firms.\n"
+        "Your mission is to polish raw text into 'Band 1' level prose while acting as a guardian of critical metadata.\n\n"
+        
         "=========================================\n"
-        "DIRECTORY-SPECIFIC COPYWRITING RULES:\n"
-        f"{custom_guidelines}\n"
+        "STRICT PRESERVATION RULES (DO NOT MODIFY):\n"
+        "1. WEB LINKS/URLS: Keep all URLs exactly as they are (e.g., bio links). They are vital for researchers. Put each URL on its own separate line.\n"
+        "2. RANKING STATUS: Preserve the lines 'Current ranking:' and 'Suggested ranking:' exactly. Do not delete them, and keep them on their own lines.\n"
+        "3. CONFIDENTIALITY TAGS: You MUST keep '[CONFIDENTIAL]' or 'CONFIDENTIAL' markers at the start of narratives.\n"
+        "4. KEY TITLES: Do not remove headers like 'Key areas of focus:' or 'Standout recent work:'.\n"
         "=========================================\n\n"
-        "CRITICAL INSTRUCTIONS:\n"
-        "1. ELEVATE THE TONE: Use high-end legal and business vocabulary. Be authoritative and punchy.\n"
-        "2. STRUCTURE FOR SCANNABILITY: Use powerful paragraphs or short blocks. bold key terms using asterisks.\n"
-        "3. STRIP THE JUNK: Remove URLs, internal notes, and filler.\n"
-        "4. ZERO HALLUCINATION: Retain every fact (names, dates, values, jurisdictions).\n"
-        "5. FOCUS ON IMPACT: Frame work as strategic market impact (e.g., 'first to market').\n"
-        "6. FIRM-FIRST PERSPECTIVE: Anchor arguments to the firm's overall dominance.\n"
-        "7. MARKDOWN: Use ONLY double asterisks for bolding (e.g. **Firm Name**). No other markdown."
+
+        "### STRATEGIC CONTEXT ###\n"
+        f"TARGET GOAL: {strat_context['realistic_target']}\n"
+        f"EVALUATION TONE: {strat_context['evaluation_tone']}\n\n"
+        "### DIRECTORY EDITORIAL RULES (FROM YAML) ###\n"
+        f"{editorial_guidelines}\n\n"
+        
+        "COPYWRITING GUIDELINES:\n"
+        f"{custom_guidelines}\n\n"
+        
+        "INSTRUCTIONS:\n"
+        "1. ELEVATE THE PROSE: Rewrite narrative paragraphs across ALL sections (biographies, department overviews, and matter descriptions). "
+        "Use active, sophisticated verbs (e.g., 'Orchestrated', 'Spearheaded') and remove repetitive phrasing.\n"
+        "2. PARAGRAPH STRUCTURE (CRITICAL): You MUST inject explicit double newlines (\\n\\n) to separate distinct paragraphs, URLs, ranking metadata, headers, and bullet points. Every new concept, link, or ranking MUST be separated by \\n\\n. DO NOT flatten the text.\n"
+        "3. STRUCTURE: For biographies, ensure ranking metadata stays at the top, followed by \\n\\n, then the polished 'Key areas of focus'.\n"
+        "4. STRIP ONLY ACTUAL JUNK: Remove internal draft notes (e.g. 'check this dates'), broken ASCII characters, "
+        "and duplicate headers. Do NOT touch links or ranking bands.\n"
+        "5. BOLDING TRIGGERS (CRITICAL): You MUST actively use double asterisks **Text** to bold key elements across ALL sections. "
+        "You MUST bold: **Lawyer Names**, **Client Companies**, **Financial Values** (e.g., **USD 250 million**), **Practice Areas** (e.g., **Banking & Finance**), and **Key Laws/Regulations**. DO NOT use any other markdown."
+        "6. RED CONFIDENTIALITY TAG (CRITICAL): You must identify any paragraph that begins with 'CONFIDENTIAL' or '[CONFIDENTIAL]'. You MUST wrap the ENTIRE warning paragraph (ALL the Paragraph) in [RED_START] and [RED_END] tags (if the next paragraph is still talking about the confidential context grab it.). You MUST inject \\n\\n immediately after the closing tag to separate the red warning from the main text.\n"
+        "Example: [RED_START][CONFIDENTIAL] This amount is strictly confidential. The lawyer conducted a transactional Cross-border...[RED_END]\\n\\n"
     )
 
     total_cleaned = 0
@@ -106,9 +130,10 @@ def sanitizer_node(state: AgentState) -> dict:
         
         user_prompt = (
             f"### BATCH {i+1} of {len(batches)} ###\n"
-            "Clean and rewrite the following fields according to the rules:\n\n"
-            f"{dirty_data_context}\n\n"
-            "Return the list of rewritten fields. Ensure 'field_key' perfectly matches the provided KEY."
+            "Rewrite the following fields to match the STRATEGIC CONTEXT and EDITORIAL RULES above.\n"
+            "CRITICAL FORMATTING: You MUST use **double asterisks** for key terms. "
+            "If a narrative contains a confidentiality warning at the beginning, you MUST wrap the ENTIRE warning sentence/paragraph in [RED_START] and [RED_END] tags and immediately follow it with \\n\\n before beginning the main text.\n\n"
+            f"{dirty_data_context}"
         )
 
         try:

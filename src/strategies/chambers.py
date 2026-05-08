@@ -103,13 +103,6 @@ class ChambersStrategy(SubmissionStrategy):
         # Pad Feedback
         pad_array(context["SectionC"], "C1_barristers_advocates", 8)
 
-        # Pad Clients & Matters
-        pad_array(context["D_publishable_information"], "D0_publishable_clients_list", 10)
-        pad_array(context["D_publishable_information"], "publishable_matters", 10)
-        
-        pad_array(context["E_confidential_information"], "E0_confidential_clients_list", 10)
-        pad_array(context["E_confidential_information"], "confidential_matters", 10)
-
         # ---------------------------------------------------------
         # 2. BOOLEAN FIXES FOR Y/N
         # ---------------------------------------------------------
