@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.core.state import AgentState
 from src.core.llm import get_llm
 from src.io.strategy_selector import get_strategic_context
-
+from src.logic.ranking_history_context import get_unified_ranking_strategy
 class StrategicQuestion(BaseModel):
     question: str = Field(
         description="The complete verbal response to the Partner. It MUST include your conversational clarification or validation FIRST, followed immediately by the targeted question."
@@ -37,7 +37,6 @@ def interrogator_node(state: AgentState) -> dict:
             # =======================================================
             if submission_data:
                 dump = submission_data.model_dump(exclude_none=True)
-                # Para la vista en el prompt
                 dump_clean = {k: v for k, v in dump.items() if v and str(v) != "{}" and str(v) != "[]"}
                 current_submission_context = str(dump_clean).replace("{", "{{").replace("}", "}}")
                 submission_dict = dump
@@ -45,25 +44,110 @@ def interrogator_node(state: AgentState) -> dict:
                 current_submission_context = "No information extracted yet."
                 submission_dict = {}
 
-            # Sacamos el "Límite de velocidad" para el LLM interrogador
-            strat_context = get_strategic_context(submission_dict)
-            current_band = strat_context.get("current_band", "Unknown")
-            realistic_target = strat_context.get("realistic_target", "Improve Ranking")
-            evaluation_tone = strat_context.get("evaluation_tone", "Be objective and professional.")
             # =======================================================
+            # 🧠 EXTRACCIÓN GLOBAL (Firm & Practice)
+            # =======================================================
+            def scrub_val(val):
+                v = str(val).strip()
+                return "" if v.upper() in ["", "N/A", "UNKNOWN", "NONE", "NULL"] else v
+
+            raw_firm_name = ""
+            raw_practice_area = ""
+
+            if "A_preliminary_information" in submission_dict and submission_dict["A_preliminary_information"]:
+                raw_firm_name = submission_dict["A_preliminary_information"].get("A1_firm_name", "")
+                raw_practice_area = submission_dict["A_preliminary_information"].get("A2_practice_area", "")
+            elif "identity" in submission_dict and submission_dict["identity"]:
+                raw_firm_name = submission_dict["identity"].get("firm_name", "")
+                raw_practice_area = submission_dict["identity"].get("practice_area", "")
+
+            firm_name = scrub_val(raw_firm_name) if scrub_val(raw_firm_name) else "your firm"
+            practice_area = scrub_val(raw_practice_area) if scrub_val(raw_practice_area) else "this practice area"
+
+            # 1. 🎯 CHECK IF STRATEGY GAPS EXIST
+            # We look inside the gaps array to see if the priority fields are still missing.
+            strategy_gaps_exist = any(
+                "current_band_status" in g.get('field', '') or 
+                "ranking_history_trajectory" in g.get('field', '') 
+                for g in gaps
+            )
+
+            # 2. 🚦 CONDITIONAL INJECTION
+            if not strategy_gaps_exist:
+                print("\n--- 🛠️ [DEBUG] STRATEGY EXTRACTION PIPELINE ---")
+                
+                # We HAVE the data. Extract it safely.
+                target_dir = getattr(state, "target_submission_type", "Chambers")
+                
+                # 🛑 SCRUBBER: Aggressively destroy default/placeholder strings
+                def scrub_val(val):
+                    v = str(val).strip()
+                    return "" if v.upper() in ["", "N/A", "UNKNOWN", "NONE", "NULL"] else v
+
+                # Extract the raw data based on the directory template
+                if "A_preliminary_information" in submission_dict and submission_dict["A_preliminary_information"]:
+                    raw_band = submission_dict["A_preliminary_information"].get("current_band_status", "")
+                    raw_hist = submission_dict["A_preliminary_information"].get("ranking_history_trajectory", "")
+                    print("📂 Source: A_preliminary_information (Chambers)")
+                elif "identity" in submission_dict and submission_dict["identity"]:
+                    raw_band = submission_dict["identity"].get("current_band_status", "")
+                    raw_hist = submission_dict["identity"].get("ranking_history_trajectory", "")
+                    print("📂 Source: identity (Legal 500)")
+                else:
+                    raw_band = ""
+                    raw_hist = ""
+                    print("📂 Source: NONE (Data missing from dictionary)")
+
+                print(f"🔍 Raw Extraction -> Band: '{raw_band}' | History: '{raw_hist}'")
+
+                # Clean the data
+                current_band = scrub_val(raw_band)
+                ranking_history = scrub_val(raw_hist)
+                
+                print(f"🧼 Scrubbed Data  -> Band: '{current_band}' | History: '{ranking_history}'")
+
+                # 🛑 DOUBLE SAFETY CHECK:
+                if current_band and ranking_history:
+                    print("✅ Safety Check Passed: Valid data found. Injecting Strategic Directives.")
+                    dynamics = get_unified_ranking_strategy(current_band, ranking_history, target_dir)
+                    realistic_target = dynamics.get("strategic_objective", "")
+                    evaluation_tone = dynamics.get("editorial_rules", "")
+
+                    # Build the complete text block to pass to the LLM
+                    strategic_directive = (
+                        "[STRATEGIC ALIGNMENT - CRITICAL DIRECTIVE]\n"
+                        f"- Firm's Current Status: {current_band}\n"
+                        f"- Realistic Target for this submission: {realistic_target}\n"
+                        f"- Evaluator Persona & Focus: {evaluation_tone}\n"
+                        "CRITICAL RULE: DO NOT flatter the firm by suggesting they are a 'Band 1' candidate unless 'Band 1' is explicitly their Target.\n\n"
+                    )
+                else:
+                    print("❌ Safety Check Failed: Junk data detected. Hiding strategy from LLM.")
+                    # The data existed in the dict but was useless (e.g. "N/A"). Hide the strategy.
+                    realistic_target = ""
+                    evaluation_tone = ""
+                    strategic_directive = ""  # The prompt sees absolutely nothing.
+                
+                print("---------------------------------------------------\n")
+                
+            else:
+                # We DO NOT have the data yet. Send an empty "" string.
+                current_band = ""
+                ranking_history = ""
+                realistic_target = ""
+                evaluation_tone = ""
+                strategic_directive = ""  # The prompt sees absolutely nothing.
 
             # --- DEBUG DEL INTERROGADOR (CEREBRO ESTRATÉGICO) ---
             print("\n" + "🧠" * 25)
             print("🕵️‍♂️ [DEBUG INTERROGATOR] INYECCIÓN ESTRATÉGICA AL PROMPT")
             print("-" * 50)
             print(f" TARGET FIELD   : {field}")
-            print(f" BANDA DETECTADA: {current_band}")
-            print(f" TARGET REALISTA: {realistic_target}")
+            print(f" BANDA DETECTADA: {current_band if current_band else 'MISSING - SENDING EMPTY STRING'}")
+            print(f" HISTORIAL      : {ranking_history if ranking_history else 'MISSING - SENDING EMPTY STRING'}")
+            print(f" TARGET REALISTA: {realistic_target if realistic_target else 'MISSING - SENDING EMPTY STRING'}")
             print("🧠" * 25 + "\n")
-            
-            # Opcional: También agregarlo a los updates para que lo veas en los logs del servidor
-            updates["messages"].append(f"Interrogator Strategy Check -> Band: {current_band} | Target: {realistic_target}")
-            # ----------------------------------------------------
+            # =======================================================
 
             llm = get_llm(temperature=0.2)
             structured_llm = llm.with_structured_output(StrategicQuestion)
@@ -78,10 +162,7 @@ def interrogator_node(state: AgentState) -> dict:
                 "[OBJECTIVE]\n"
                 "Conduct a highly efficient, strategic interview to extract necessary information for their directory submission. "
                 "ALWAYS generate exactly ONE clear, targeted question. Do not overwhelm the user with multiple questions at once.\n\n"
-                "[STRATEGIC ALIGNMENT - CRITICAL DIRECTIVE]\n"
-                f"- Firm's Current Status: {current_band}\n"
-                f"- Realistic Target for this submission: {realistic_target}\n"
-                f"- Evaluator Persona & Focus: {evaluation_tone}\n"
+                f"{strategic_directive}"
                 "CRITICAL: DO NOT flatter the firm by suggesting they are a 'Band 1' candidate if their target is lower (e.g., Band 3 or Band 2). "
                 "[THE FORBIDDEN LEXICON - STRICTLY ENFORCED]\n"
                 "You will receive system variables representing missing fields (e.g., 'publishable_matters.0.D3_matter_value' or 'identity.firm_name'). "
@@ -215,11 +296,11 @@ def interrogator_node(state: AgentState) -> dict:
                     "--- INTERNAL SYSTEM TARGET (DO NOT SAY THIS OUT LOUD) ---\n"
                     "Target Field needed: {field}\n"
                     "Reason: {reason}\n\n"
-                    "{matter_instruction}\n" # 👈 INYECTADO AQUÍ
-                    "{confidentiality_instruction}\n\n" # 👈 INYECTADO AQUÍ
+                    "{matter_instruction}\n"
+                    "{confidentiality_instruction}\n\n"
                     "--- YOUR TASK (THE FAN SERVICE HOOK) ---\n"
                     "1. The Partner just submitted their initial draft for your review.\n"
-                    "2. Start with a 1-2 sentence strategic mini-audit: Validate their work against the '{realistic_target}'. Explicitly mention a specific strength, impressive client, or standout matter you see in the 'Extracted Firm Data'.\n"
+                    "2. Start with a 1-2 sentence strategic welcome for **{firm_name}** regarding their **{practice_area}** practice. Validate their work against the '{realistic_target}'. Explicitly mention a specific strength or impressive client you see in the 'Extracted Firm Data'.\n" # 👈 UPDATED
                     "3. KEEP TONE REALISTIC. Do not promise Band 1 if that is not the target.\n"
                     "4. Then, seamlessly pivot to ask for the missing information. Remember the FORBIDDEN LEXICON: translate '{field}' into a natural, strategic question."
                 )
@@ -229,8 +310,10 @@ def interrogator_node(state: AgentState) -> dict:
                     "current_submission_context": current_submission_context,
                     "realistic_target": realistic_target,
                     "evaluation_tone": evaluation_tone,
-                    "matter_instruction": matter_instruction, # 👈 PASADO AQUÍ
-                    "confidentiality_instruction": confidentiality_instruction # 👈 PASADO AQUÍ
+                    "matter_instruction": matter_instruction,
+                    "confidentiality_instruction": confidentiality_instruction,
+                    "firm_name": firm_name,         # 👈 PASSED HERE
+                    "practice_area": practice_area  # 👈 PASSED HERE
                 }
 
             elif is_first_interaction:
@@ -239,10 +322,10 @@ def interrogator_node(state: AgentState) -> dict:
                     "--- INTERNAL SYSTEM TARGET (DO NOT SAY THIS OUT LOUD) ---\n"
                     "Target Field needed: {field}\n"
                     "Reason: {reason}\n\n"
-                    "{matter_instruction}\n" # 👈 INYECTADO AQUÍ
-                    "{confidentiality_instruction}\n\n" # 👈 INYECTADO AQUÍ
+                    "{matter_instruction}\n"
+                    "{confidentiality_instruction}\n\n"
                     "--- YOUR TASK ---\n"
-                    "1. Give a brief, highly professional welcome to the strategy session.\n"
+                    "1. Give a brief, highly professional welcome to the strategy session specifically for **{firm_name}** regarding their **{practice_area}** submission.\n" # 👈 UPDATED
                     "2. Adapt your welcome to the following persona: {evaluation_tone}\n"
                     "3. Smoothly ask the Partner to provide the information needed to lay the foundation of our submission.\n"
                     "4. Remember the FORBIDDEN LEXICON: translate '{field}' into a natural human question."
@@ -251,8 +334,10 @@ def interrogator_node(state: AgentState) -> dict:
                     "field": field, 
                     "reason": reason,
                     "evaluation_tone": evaluation_tone,
-                    "matter_instruction": matter_instruction, # 👈 PASADO AQUÍ
-                    "confidentiality_instruction": confidentiality_instruction # 👈 PASADO AQUÍ
+                    "matter_instruction": matter_instruction,
+                    "confidentiality_instruction": confidentiality_instruction,
+                    "firm_name": firm_name,         # 👈 PASSED HERE
+                    "practice_area": practice_area  # 👈 PASSED HERE
                 }
 
             else:

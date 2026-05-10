@@ -13,8 +13,6 @@ from src.io.strategy_selector import get_config_path
 
 # Importamos LangChain para la clasificación
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from src.core.llm import get_llm_2
 
 # =========================================================
 # ESQUEMA PYDANTIC PARA CLASIFICACIÓN 1:1
@@ -99,7 +97,7 @@ def classification_node(state: AgentState) -> dict:
     if extracted_text.strip():
         # Aumentamos a 8000 caracteres porque las portadas de firmas 
         # suelen tener mucho texto legal antes de las etiquetas B4/B7
-        text_excerpt = extracted_text[:8000] 
+        text_excerpt = extracted_text[:500] 
         
         # LOG DE CONSOLA: Para que veas qué está recibiendo la IA
         print(f"\n--- [DEBUG CLASSIFIER] TEXTO RECIBIDO (Primeros 300 chars) ---")
@@ -107,7 +105,7 @@ def classification_node(state: AgentState) -> dict:
         print(f"-----------------------------------------------------------\n")
 
         try:
-            llm = get_llm_2(temperature=0)
+            llm = get_llm(temperature=0)
             structured_llm = llm.with_structured_output(DocumentClassification)
             
             prompt = ChatPromptTemplate.from_messages([

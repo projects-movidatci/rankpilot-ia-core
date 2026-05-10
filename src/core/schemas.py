@@ -1,4 +1,4 @@
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Literal
 from pydantic import BaseModel, Field
 
 # =====================================================================
@@ -38,6 +38,10 @@ class Identity(BaseModel):
     interview_contacts: List[InterviewContact] = Field(default_factory=list, description="List of contacts to arrange interviews with.")
     current_band_status: str = Field(
         description="CRITICAL STRATEGY FIELD. The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4')."
+    )
+    ranking_history_trajectory: Optional[Literal["Ascent", "Descent", "Stagnation", "N/A"]] = Field(
+        default="N/A",
+        description="The firm's recent ranking history. Choose 'Ascent' if they recently climbed, 'Descent' if they dropped, 'Stagnation' if they have been in the same band for years, or 'N/A' if unknown."
     )
 
 # -----------------------------------
@@ -183,8 +187,14 @@ class PreliminaryInformation(BaseModel):
     A2_practice_area: Optional[str] = Field(None, description="The specific practice area being submitted for (e.g., 'FinTech Legal').")
     A3_location_jurisdiction: Optional[str] = Field(None, description="The country or jurisdiction the submission applies to.")
     A4_contact_persons: List[ContactPerson] = Field(default_factory=list, description="List of personnel designated to arrange interviews.")
-    current_band_status: str = Field(
-        description="CRITICAL STRATEGY FIELD. The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4')."
+    current_band_status: Optional[str] = Field(
+        default=None,
+        description="CRITICAL STRATEGY FIELD. The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4'). If not explicitly mentioned, return null."
+    )
+    
+    ranking_history_trajectory: Optional[Literal["Ascent", "Descent", "Stagnation", "First Time"]] = Field(
+        default=None,
+        description="The firm's recent ranking history. Choose 'Ascent' if they recently climbed, 'Descent' if they dropped, 'Stagnation' if they have been in the same band for years, or 'First Time' if they have never been ranked before. If the history is not explicitly mentioned, you MUST return null."
     )
 
 # -----------------------------------

@@ -32,17 +32,18 @@ required_fields:
   - "A_preliminary_information.A2_practice_area"
   - "A_preliminary_information.A3_location_jurisdiction"
   - "A_preliminary_information.current_band_status"
+  - "A_preliminary_information.ranking_history_trajectory"
   
   # --- SECTION B: Department Info & Headcounts ---
-  - "B_department_information.B1_department_name"
+  - "B_department_information.department_name"
   - "B_department_information.B2_partners.total_number"
   - "B_department_information.B3_other_qualified_lawyers.total_number"
-  - "B_department_information.B10_department_best_known_for"
+  - "B_department_information.department_best_known_for"
   
   # --- SECTION A/B: Deep Array Checks (Ensure they provided Contacts) ---
   - "A_preliminary_information.A4_contact_persons.0.name"
   - "A_preliminary_information.A4_contact_persons.0.email"
-  - "B_department_information.B7_heads_of_department.0.name"
+  - "B_department_information.heads_of_department.0.name"
 
   # --- SECTION D: Publishable Matter 1 (Strict Financial & Strategy details) ---
   - "D_publishable_information.publishable_matters.0.D1_name_of_client"
@@ -113,23 +114,27 @@ schema:
           description: "The geographic location or jurisdiction for the submission."
         A4_contact_person: 
           description: "List of contacts to arrange interviews, including Name, Email, and Telephone number."
+        current_band_status: 
+          description: "CRITICAL STRATEGY FIELD. The current ranking status of the firm in this specific practice area (e.g., 'Unranked', 'Band 1', 'Band 4')."
+        ranking_history_trajectory:
+          description: "The firm's historical directory performance. If they are Unranked, ask if they have ever been ranked before and dropped off (Descent), or if this is their very first time submitting (First Time). If they are ranked, ask if they are stagnant, climbing (Ascent), or dropping (Descent)."
           
     B_department_information:
       description: "Information regarding the team's composition, leadership, recent changes, and core strengths."
       fields:
-        B1_department_name: 
+        department_name: 
           description: "The internal name the firm uses for this department."
         B2_number_of_partners: 
           description: "Total number of partners in the department, including Male/Female ratio as a percentage."
         B3_number_of_other_qualified_lawyers: 
           description: "Total number of non-partner lawyers, including Male/Female ratio as a percentage."
-        B7_head_of_department: 
+        head_of_department: 
           description: "Name, Email, and Telephone number of the Head(s) of the department."
         B8_hires_and_departures: 
           description: "Significant partner arrivals or departures in the last 12 months, including where they joined from or departed to."
         B9_ranked_and_unranked_lawyers: 
           description: "List of lawyers to highlight, including Name, web link/comments, whether they are a partner, and if they are currently ranked."
-        B10_department_best_known_for: 
+        department_best_known_for: 
           description: "A 500-word narrative covering industry sector expertise, key types of work, areas of recent growth, and feedback on recent coverage."
 
     C_feedback:

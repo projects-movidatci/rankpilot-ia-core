@@ -23,9 +23,12 @@ class ChambersStrategy(SubmissionStrategy):
     def audit(self, submission_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Runs the Gap Analysis.
-        CRITICAL: Outputs the FULL dot-notation path so the Answer Evaluator knows exactly where to inject the data.
+        CRITICAL: Outputs the FULL dot-notation path and the YAML Description!
         """
         required_fields = self.config.get("required_fields", [])
+        
+        # 🆕 EXTRACT THE SCHEMA DEFINITIONS FROM YAML
+        yaml_schema = self.config.get("schema", {}).get("sections", {})
         gaps = []
 
         # Helper to safely check if a deeply nested path exists and has data
@@ -42,15 +45,35 @@ class ChambersStrategy(SubmissionStrategy):
             except (KeyError, IndexError, TypeError):
                 return None
 
+        # 🆕 HELPER TO GET THE RICH DESCRIPTION FROM YAML
+        def get_yaml_description(field_path):
+            parts = field_path.split('.')
+            if len(parts) >= 2:
+                section = parts[0]
+                field_name = parts[-1]
+                try:
+                    return yaml_schema.get(section, {}).get("fields", {}).get(field_name, {}).get("description", None)
+                except AttributeError:
+                    return None
+            return None
+
         for field_path in required_fields:
             val = get_nested_value(submission_data, field_path)
-            # If the field doesn't exist, is an empty string, or an empty list
-            if val in [None, "", []]:
-                # We KEEP the full dot-notation path!
+            
+            is_empty_string = isinstance(val, str) and val.strip().upper() in ["", "N/A", "UNKNOWN", "NONE", "NULL"]
+            
+            if val is None or val == [] or is_empty_string:
                 friendly_name = field_path.split('.')[-1].replace("_", " ").title()
+                
+                # 🆕 GET THE DESCRIPTION
+                yaml_desc = get_yaml_description(field_path)
+                
+                # 🆕 PASS THE DESCRIPTION TO THE LLM
+                reason = f"FIELD DEFINITION: {yaml_desc}" if yaml_desc else f"Please provide information for {friendly_name}."
+                
                 gaps.append({
                     "field": field_path, 
-                    "reason": f"Please provide information for {friendly_name}."
+                    "reason": reason
                 })
                 
         return gaps
