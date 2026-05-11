@@ -1,4 +1,3 @@
-from lmnr import Laminar
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,8 +8,6 @@ import sys
 from src.core.workflow import build_workflow
 from src.core.state import AgentState, MetaData
 from src.core.schemas import Legal500Submission, ChambersSubmission
-
-Laminar.initialize()
 
 api = FastAPI(title="RankPilot API")
 
