@@ -23,7 +23,6 @@ from src.agents.assembler import assembly_node
 from src.agents.snapshot_generator import snapshot_generator_node
 from src.agents.executive_writer import executive_writer_node
 
-
 def route_entry(state: AgentState) -> Literal["process_answer_node", "classification_node"]:
     """
     Ruteo de entrada:

@@ -1,0 +1,15 @@
+```markdown
+## Resumen:
+Este archivo define esquemas Pydantic para aplicar parches a los datos de envío e incluye una función `update_node` que procesa las respuestas del usuario, utiliza un LLM para estructurar y traducir la respuesta a un esquema `SubmissionPatch`, y luego fusiona estas actualizaciones en una estructura de datos de envío existente.
+
+## Clases:
+- `FieldUpdate`: Representa un único campo a actualizar dentro de un envío, conteniendo el nombre del campo y su nuevo valor como una cadena JSON.
+- `SubmissionPatch`: Un contenedor para una lista de objetos `FieldUpdate`, representando una colección de cambios a aplicar a un envío.
+
+## Funciones y Métodos:
+
+| Nombre                | Parámetros                                                    | Responsabilidad                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deep_update_field` | `data: dict`, `target_field: str`, `new_value: Any`           | Busca recursivamente un `target_field` especificado dentro de un diccionario anidado (`data`). Si se encuentra, actualiza el campo con `new_value`. Fusiona de manera inteligente diccionarios si tanto el valor existente como `new_value` son diccionarios, de lo contrario, sobrescribe el valor. Devuelve `True` si ocurrió una actualización, `False` en caso contrario.                                                                                |
+| `update_node`       | `state: AgentState`                                           | Procesa un objeto `AgentState` para actualizar un envío. Extrae la respuesta del usuario, la pregunta y el campo de destino de `state.new_answer`. Luego utiliza un LLM configurado con un esquema `SubmissionPatch` para analizar, traducir (si es necesario) y estructurar la respuesta. Los objetos `FieldUpdate` estructurados se aplican luego a los datos de `submission` existentes en el estado utilizando `deep_update_field`. El estado se actualiza con el envío modificado, el historial y los mensajes. |
+```

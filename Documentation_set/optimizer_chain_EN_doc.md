@@ -1,0 +1,14 @@
+1. ## Overview: This file defines Pydantic models and Langchain chains designed to process and optimize legal text for various purposes, including firm narratives, matter descriptions, and work summaries. It leverages LLMs to transform raw input into polished, market-leading content.
+2. ## Classes:
+    - `OptimizedNarrative`: Represents the structured output for an optimized firm narrative, containing "what sets us apart" and "initiatives and innovation" sections.
+    - `OptimizedMatter`: Represents the structured output for an optimized legal matter description.
+    - `OptimizedSummary`: Represents the structured output for a condensed legal summary.
+3. ## Functions & Methods:
+
+| Name            | Parameters                                      | Responsibility                                                                                                                                                                                                |
+| --------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_llm`       | `temperature` (float)                           | Retrieves a configured Language Model instance.                                                                                                                                                               |
+| `ChatPromptTemplate.from_template` | `template` (str)                                | Creates a prompt template for interacting with chat-based Large Language Models.                                                                                                                            |
+| `BaseModel`     | N/A                                             | Base class for creating data models with validation, required for Pydantic models.                                                                                                                            |
+| `Field`         | `description` (str), `default` (any)            | Used within Pydantic models to provide metadata and default values for model fields.                                                                                                                          |
+| `LLM.with_structured_output` | `model` (Pydantic model class), `output_parser` (optional) | Configures an LLM to return output in a structured format, typically parsed into a Pydantic model.                                                                                                   |

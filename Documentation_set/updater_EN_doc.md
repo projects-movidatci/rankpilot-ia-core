@@ -1,0 +1,13 @@
+## Overview:
+This file defines Pydantic schemas for patching submission data and includes a `update_node` function that processes user answers, utilizes an LLM to structure and translate the answer into a `SubmissionPatch` schema, and then merges these updates into an existing submission data structure.
+
+## Classes:
+- `FieldUpdate`: Represents a single field to be updated within a submission, containing the field's name and its new value as a JSON string.
+- `SubmissionPatch`: A container for a list of `FieldUpdate` objects, representing a collection of changes to be applied to a submission.
+
+## Functions & Methods:
+
+| Name                | Parameters                                                    | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deep_update_field` | `data: dict`, `target_field: str`, `new_value: Any`           | Recursively searches for a specified `target_field` within a nested dictionary (`data`). If found, it updates the field with `new_value`. It intelligently merges dictionaries if both the existing value and `new_value` are dictionaries, otherwise it overwrites the value. Returns `True` if an update occurred, `False` otherwise.                                                                                |
+| `update_node`       | `state: AgentState`                                           | Processes an `AgentState` object to update a submission. It extracts the user's answer, question, and target field from `state.new_answer`. It then uses an LLM configured with a `SubmissionPatch` schema to parse, translate (if necessary), and structure the answer. The structured `FieldUpdate` objects are then applied to the existing `submission` data in the state using `deep_update_field`. The state is updated with the modified submission, history, and messages. |
