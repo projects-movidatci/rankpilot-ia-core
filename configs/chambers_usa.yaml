@@ -151,7 +151,7 @@ schema:
         D0_publishable_clients:
           description: "List of clients the firm is permitted to mention publicly, including whether they are new clients."
         publishable_matters:
-          description: "Array of up to 10 publishable work highlights."
+          description: "Array of up to 20 publishable work highlights. CRITICAL: If the system flags a missing field here (e.g., index 3), it means we need a COMPLETELY NEW matter to add to the submission. Ask the partner for their next best case."
           item_structure:
             D1_client_name: "Name of the client or general description."
             D2_summary: "Summary of the matter, why it was important, and the department's exact role."

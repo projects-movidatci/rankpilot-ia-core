@@ -1,12 +1,12 @@
 from src.chains.snapshot_chain import snapshot_chain, archetype_chain
 from src.core.state import AgentState
 from src.io.strategy_selector import get_strategic_context
+from src.logic.ranking_history_context import get_unified_ranking_strategy # 👈 NUEVO IMPORT
 
 def snapshot_generator_node(state: AgentState):
     print("--- [NODE] Generating Final Snapshot ---")
     
     try:
-        # Reemplazo total de .get() por getattr
         submission_obj = getattr(state, "submission", None)
         submission_dict = submission_obj.model_dump(exclude_none=True) if submission_obj else {}
         submission_json = submission_obj.model_dump_json() if submission_obj else getattr(state, "raw_text", "")
@@ -15,21 +15,47 @@ def snapshot_generator_node(state: AgentState):
         practice_area = getattr(metadata, "practice_area", "Unknown") if metadata else "Unknown"
         history = getattr(state, "history", [])
         config = getattr(state, "config", {})
+        target_dir = getattr(state, "target_submission_type", "Chambers")
         
-        # Para diccionarios internos (como config), .get() sigue siendo válido, 
-        # pero para el 'state', usamos getattr
         guidelines = config.get("copywriting_guidelines", "Standard evaluation")
 
-        # Contexto Estratégico
+        # Contexto Estratégico Base
         context = get_strategic_context(submission_dict)
         
-        # 2. En lugar de usar .get() directamente, usamos getattr con un fallback
-        # Esto blinda el código incluso si 'context' llegara a ser un objeto o None
-        target = getattr(context, "get", lambda k, d: context.get(k, d) if isinstance(context, dict) else d)("realistic_target", "Ranked Position")
-        tone = getattr(context, "get", lambda k, d: context.get(k, d) if isinstance(context, dict) else d)("evaluation_tone", "Objective")
+        # =======================================================
+        # 🧠 INYECCIÓN DEL HISTORIAL DE RANKING (NUEVO)
+        # =======================================================
+        def scrub_val(val):
+            v = str(val).strip()
+            return "" if v.upper() in ["", "N/A", "UNKNOWN", "NONE", "NULL"] else v
+
+        if "A_preliminary_information" in submission_dict and submission_dict["A_preliminary_information"]:
+            raw_band = submission_dict["A_preliminary_information"].get("current_band_status", "")
+            raw_hist = submission_dict["A_preliminary_information"].get("ranking_history_trajectory", "")
+        elif "identity" in submission_dict and submission_dict["identity"]:
+            raw_band = submission_dict["identity"].get("current_band_status", "")
+            raw_hist = submission_dict["identity"].get("ranking_history_trajectory", "")
+        else:
+            raw_band = ""
+            raw_hist = ""
+
+        current_band = scrub_val(raw_band)
+        ranking_history = scrub_val(raw_hist)
+
+        # Si tenemos los datos, usamos nuestro motor unificado. Si no, usamos el fallback.
+        if current_band and ranking_history:
+            dynamics = get_unified_ranking_strategy(current_band, ranking_history, target_dir)
+            target = dynamics.get("strategic_objective", "General Advancement")
+            tone = dynamics.get("editorial_rules", "Objective")
+        else:
+            current_band = "Unknown"
+            ranking_history = "Unknown"
+            target = getattr(context, "get", lambda k, d: context.get(k, d) if isinstance(context, dict) else d)("realistic_target", "Ranked Position")
+            tone = getattr(context, "get", lambda k, d: context.get(k, d) if isinstance(context, dict) else d)("evaluation_tone", "Objective")
+        
         archetypes = getattr(context, "get", lambda k, d: context.get(k, d) if isinstance(context, dict) else d)("possible_archetypes", "Standard Practice")
 
-        # PASO 1: Clasificador (Sin la variable 'selected_archetype' en el input)[cite: 3]
+        # PASO 1: Clasificador
         archetype_result = archetype_chain.invoke({
             "possible_archetypes": archetypes,
             "practice_area": practice_area,
@@ -39,7 +65,7 @@ def snapshot_generator_node(state: AgentState):
 
         raw_guidelines = archetype_result.narrative_guidelines
         
-        # PASO 2: Auditoría/Maquillaje[cite: 3]
+        # PASO 2: Auditoría Estratégica (Snapshot)
         result = snapshot_chain.invoke({
             "submission_json": submission_json,
             "history": "\n".join(history) if history else "No history.",
@@ -48,7 +74,9 @@ def snapshot_generator_node(state: AgentState):
             "realistic_target": target,
             "evaluation_tone": tone,
             "selected_archetype": archetype_result.selected_archetype,
-            "narrative_guidelines": raw_guidelines
+            "narrative_guidelines": raw_guidelines,
+            "current_band": current_band,        # 👈 PASAMOS LA BANDA
+            "ranking_history": ranking_history   # 👈 PASAMOS EL HISTORIAL
         })
         
         return {

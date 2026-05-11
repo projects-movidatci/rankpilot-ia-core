@@ -4,16 +4,15 @@ from pydantic import BaseModel, Field
 from typing import List, Union
 from langchain_core.output_parsers import PydanticOutputParser
 
-# --- 1. ESQUEMA DEL CLASIFICADOR (Enfoque en Maquillaje/Narrativa) ---
+# --- 1. ESQUEMA DEL CLASIFICADOR ---
 class ArchetypeSelection(BaseModel):
     selected_archetype: str = Field(description="The exact name of the chosen archetype.")
     brief_justification: str = Field(description="1 sentence explaining why.")
-    # Aceptamos Union para ser flexibles
     narrative_guidelines: Union[str, List[str]] = Field(
         description="3 strategic bullet points. Can be a single string or a list of strings."
     )
 
-# --- 2. ESQUEMAS DEL SNAPSHOT (Sin cambios estructurales) ---
+# --- 2. ESQUEMAS DEL SNAPSHOT ---
 class PositioningTier(BaseModel):
     label: str = Field(description="One of: 'Elite', 'Consolidated', or 'Market Member'.")
     explanation: str = Field(description="Professional justification for the assigned tier.")
@@ -30,7 +29,7 @@ class FinalSnapshot(BaseModel):
     competitive_advantage: List[str] = Field(description="Top 2 'Elite' signals.")
 
 
-# --- 3. CADENA DEL CLASIFICADOR (Ahora sabe la banda a la que apuntamos) ---
+# --- 3. CADENA DEL CLASIFICADOR ---
 archetype_parser = PydanticOutputParser(pydantic_object=ArchetypeSelection)
 
 archetype_prompt = ChatPromptTemplate.from_template(
@@ -72,8 +71,14 @@ snapshot_prompt = ChatPromptTemplate.from_template(
     =========================================
     
     [CRITICAL STRATEGIC CONTEXT]
+    - Firm Current Band: {current_band}
+    - Firm Trajectory: {ranking_history}
     - Realistic Target: {realistic_target}
     - Evaluation Tone & Directive: {evaluation_tone}
+    
+    [HARD NARRATIVE RULE - STRICTLY ENFORCED]
+    If the submission contains high-quality, complex matters (strong evidence) but the descriptions are poorly written, generic, or lack strategic framing, YOU MUST NOT frame this as a "failure" or "weak practice". 
+    Instead, diagnose it explicitly as a "Lack of rankable narrative" or a "Translation Gap" where the firm's excellent work is not being properly communicated to the directory researchers.
     
     [FIRM IDENTITY & IDEAL NARRATIVE]
     - Archetype: **{selected_archetype}**
@@ -92,10 +97,10 @@ snapshot_prompt = ChatPromptTemplate.from_template(
 
     PHASE 2: THE TIER VERDICT
     - Assign a Tier: [Elite / Consolidated / Market Member].
-    - JUSTIFICATION: Compare their actual evidence against the {realistic_target}. 
+    - JUSTIFICATION: Compare their actual evidence against the {realistic_target} considering their current trajectory ({ranking_history}).
 
     PHASE 3: THE NARRATIVE BLIND SPOTS (4 Points)
-    Identify exactly 4 areas where their current text fails to follow the 'Narrative Guidelines' or the 'Evaluation Tone'. (e.g., Are they hiding their best cases? Are they sounding too generic for their archetype?)
+    Identify exactly 4 areas where their current text fails to follow the 'Narrative Guidelines' or the 'Evaluation Tone'. (Remember the HARD NARRATIVE RULE: distinguish between weak evidence vs. weak writing).
 
     PHASE 4: THE WEAPONS (2 Competitive Advantages)
     Identify exactly 2 structural or factual strengths that we can highlight in the final report.
