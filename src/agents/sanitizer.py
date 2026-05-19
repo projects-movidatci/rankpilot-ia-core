@@ -18,16 +18,38 @@ class SanitizationBatch(BaseModel):
 def get_long_string_fields(data: Any, path: str = "") -> Dict[str, str]:
     """Recursively finds all string fields longer than 50 characters to sanitize using dot notation."""
     long_strings = {}
+    
+    # 🛡️ THE FIX: THE ULTIMATE SANITIZER BLACKLIST
+    forbidden_keys = [
+        "publishable_matters",           # <--- BLOCKS THE ENTIRE PUBLISHABLE ARRAY
+        "confidential_matters",          # <--- BLOCKS THE ENTIRE CONFIDENTIAL ARRAY
+        "D2_summary_of_matter_and_role", # (Kept for safety)
+        "E2_summary_of_matter_and_role", # (Kept for safety)
+        "matter_description",            # (Legal 500 safety)
+        "publishable_summary",
+        "D1_name_of_client",
+        "E1_name_of_client"
+    ]
+
     if isinstance(data, dict):
         for k, v in data.items():
-            new_path = f"{path}.{k}" if path else k
-            long_strings.update(get_long_string_fields(v, new_path))
+            current_key_path = f"{path}.{k}" if path else k
+            
+            # DEBUG BLOCK: Check if it's forbidden
+            if k in forbidden_keys:
+                print(f"🛑 [SANITIZER SHIELD] Protecting forbidden array/field: {current_key_path}")
+                continue # Skip traversing this entire branch!
+                
+            long_strings.update(get_long_string_fields(v, current_key_path))
+            
     elif isinstance(data, list):
         for i, item in enumerate(data):
             new_path = f"{path}.{i}"
             long_strings.update(get_long_string_fields(item, new_path))
+            
     elif isinstance(data, str) and len(data) > 50:
         long_strings[path] = data
+        
     return long_strings
 
 def apply_cleaned_field(data: Any, path: str, clean_text: str):
@@ -62,6 +84,7 @@ def sanitizer_node(state: AgentState) -> dict:
 
     # 1. Identificar campos largos
     text_fields_to_clean = get_long_string_fields(submission_dict)
+
     if not text_fields_to_clean:
         updates["messages"].append("Sanitizer node: No long text fields found to clean.")
         return updates

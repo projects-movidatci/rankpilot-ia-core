@@ -32,6 +32,42 @@ def interrogator_node(state: AgentState) -> dict:
             field = first_gap.get('field', 'unknown')
             reason = first_gap.get('reason', 'Missing information.')
 
+            # =========================================================
+            # 🧠 NEW: THE CONTEXT INJECTOR & EDITORIAL EXTRACTOR
+            # Extracts the specific client name and current summary.
+            # =========================================================
+            matter_context = ""
+            client_name = "Unknown Client"
+            matter_summary = ""
+            
+            try:
+                if "publishable_matters" in field or "confidential_matters" in field:
+                    parts = field.split(".")
+                    if len(parts) >= 3 and parts[2].isdigit():
+                        matter_idx = int(parts[2])
+                        sub = getattr(state, "submission", None)
+                        
+                        if sub:
+                            if "publishable" in parts[1]:
+                                section = getattr(sub, "D_publishable_information", None)
+                                matters = getattr(section, "publishable_matters", []) if section else []
+                                client_field = "D1_name_of_client"
+                                summary_field = "D2_summary_of_matter_and_role"
+                            else:
+                                section = getattr(sub, "E_confidential_information", None)
+                                matters = getattr(section, "confidential_matters", []) if section else []
+                                client_field = "E1_name_of_client"
+                                summary_field = "E2_summary_of_matter_and_role"
+                                
+                            if matter_idx < len(matters):
+                                client_name = getattr(matters[matter_idx], client_field, "Unknown Client")
+                                matter_summary = getattr(matters[matter_idx], summary_field, "No summary provided.")
+                                
+                                if client_name and client_name != "Unknown Client":
+                                    matter_context = f"\n[CRITICAL CONTEXT: You are asking about the specific matter for the client: '{client_name}'. YOU MUST MENTION THIS CLIENT NAME IN YOUR QUESTION.]\n"
+            except Exception as e:
+                print(f"⚠️ Context Injector skipped: {e}")
+
             # =======================================================
             # 🧠 EXTRACCIÓN E INYECCIÓN DEL CONTEXTO ESTRATÉGICO
             # =======================================================
@@ -167,6 +203,7 @@ def interrogator_node(state: AgentState) -> dict:
                 "ALWAYS generate exactly ONE clear, targeted question. Do not overwhelm the user with multiple questions at once. "
                 "Frame the request not as filling out a form, but as capturing critical evidence needed to secure the optimal ranking.\n\n"
                 f"{strategic_directive}"
+                f"{matter_context}"
                 "[FORMATTING RULES: MANDATORY MARKDOWN]\n"
                 "You MUST format your entire response in elegant Markdown to provide a superior user experience. Follow these strict typographic rules:\n"
                 "1. If giving a compliment or strategic summary, optionally use a heading like `###` for emphasis, or format it cleanly.\n"
@@ -234,6 +271,10 @@ def interrogator_node(state: AgentState) -> dict:
             # =======================================================
 
             is_matter_request = "matters" in field.lower()
+            is_new_matter_request = is_matter_request and "name_of_client" in field.lower()
+            
+            # 🧠 NUEVO: Detectamos si es una orden de mejora del Rubric Evaluator
+            is_strategic_enhancement = "partner_additional_notes" in field.lower() or "editorial_feedback" in field.lower()
             matter_instruction = ""
 
             # --- NUEVO: DETECCIÓN DE CONFIDENCIALIDAD ---
@@ -272,32 +313,40 @@ def interrogator_node(state: AgentState) -> dict:
 
             # --- RAMIFICACIÓN DE PROMPTS SEGÚN EL ESCENARIO ---
             
-            if is_first_interaction and input_type in ["docx", "pdf", "raw_text"] and len(current_submission_context) > 20:
+            if is_first_interaction and input_type in ["chambers_submission", "legal500_submission", "leadersleague_submission"] and len(current_submission_context) > 20:
                 # RAMA 1: EL "FAN SERVICE"
+                print("\n--- 🚀 RAMA 1: EL FAN SERVICE (CON PRIMERA INTERACCIÓN Y CONTEXTO RICO) ---")
+                safe_target = realistic_target if realistic_target else "To be determined based on this data"
+                
                 user_prompt = (
                     "--- EXTRACTED FIRM DATA SO FAR ---\n"
                     "{current_submission_context}\n\n"
+                    "--- FIRM PROFILE ---\n"
+                    "Firm: {firm_name}\n"
+                    "Practice Area: {practice_area}\n"
+                    "Strategic Target: {safe_target}\n\n"
                     "--- INTERNAL SYSTEM TARGET (DO NOT SAY THIS OUT LOUD) ---\n"
                     "Target Field needed: {field}\n"
                     "Reason: {reason}\n\n"
                     "{matter_instruction}\n"
                     "{confidentiality_instruction}\n\n"
-                    "--- YOUR TASK (THE FAN SERVICE HOOK) ---\n"
-                    "1. The Partner just submitted their initial draft for your review.\n"
-                    "2. Start with a 1-2 sentence strategic welcome for **{firm_name}** regarding their **{practice_area}** practice. Validate their work against the '{realistic_target}'. Explicitly mention a specific strength or impressive client you see in the 'Extracted Firm Data'.\n" # 👈 UPDATED
-                    "3. KEEP TONE REALISTIC. Do not promise Band 1 if that is not the target.\n"
-                    "4. Then, seamlessly pivot to ask for the missing information. Remember the FORBIDDEN LEXICON: translate '{field}' into a natural, strategic question."
+                    "--- YOUR TASK: THE NARRATIVE EXECUTIVE HOOK ---\n"
+                    "The Partner just submitted their initial draft. You must generate a single, cohesive response following this exact flow:\n\n"
+                    "1. THE WELCOME: Start with a sophisticated, 1-2 sentence strategic welcome explicitly naming **{firm_name}** and the **{practice_area}** practice.\n"
+                    "2. THE NARRATIVE AUDIT: Provide a brief, high-level assessment of their practice's footprint based on the extracted data. DO NOT use tables, bullet points, or numbers to count matters. Read the data like a senior editor and summarize the 'vibe' or focus of their work.\n"
+                    "3. THE SPOTLIGHT: Identify EXACTLY ONE (1) highly impressive client, transaction, or matter from the data. Explicitly name it and state briefly why it strengthens their submission (e.g., market impact, cross-border elements, complexity, or prestige).\n"
+                    "4. THE PIVOT: Seamlessly transition from this praise into a collaborative request for the missing information. Make it feel like the natural next step to secure their ranking.\n"
+                    "5. THE TRANSLATION: Remember the FORBIDDEN LEXICON. Translate '{field}' into a natural, strategic question. Ask exactly ONE question."
                 )
                 prompt_vars = {
                     "field": field,
                     "reason": reason,
                     "current_submission_context": current_submission_context,
-                    "realistic_target": realistic_target,
-                    "evaluation_tone": evaluation_tone,
                     "matter_instruction": matter_instruction,
                     "confidentiality_instruction": confidentiality_instruction,
                     "firm_name": firm_name,         # 👈 PASSED HERE
-                    "practice_area": practice_area  # 👈 PASSED HERE
+                    "practice_area": practice_area,  # 👈 PASSED HERE
+                    "safe_target": safe_target
                 }
 
             elif is_first_interaction:
@@ -322,6 +371,30 @@ def interrogator_node(state: AgentState) -> dict:
                     "confidentiality_instruction": confidentiality_instruction,
                     "firm_name": firm_name,         # 👈 PASSED HERE
                     "practice_area": practice_area  # 👈 PASSED HERE
+                }
+
+            elif is_strategic_enhancement:
+                # RAMA 4: EL "EDITORIAL PUSH" (Mejora de narrativa existente)
+                user_prompt = (
+                    "--- STRATEGIC ENHANCEMENT REQUIRED ---\n"
+                    "We are reviewing a specific matter for the client: **'{client_name}'**.\n"
+                    "The Partner previously provided this summary for the matter:\n"
+                    "> \"{matter_summary}\"\n\n"
+                    "--- RUBRIC FEEDBACK (DO NOT READ THIS OUT LOUD VERBATIM) ---\n"
+                    "Our internal evaluation rubric flagged this matter for the following reason:\n"
+                    "{reason}\n\n"
+                    "{confidentiality_instruction}\n\n"
+                    "--- YOUR TASK (THE EDITORIAL PUSH) ---\n"
+                    "1. Acknowledge the matter briefly, stating that it is a strong transaction but needs more depth to stand out to the directory researchers.\n"
+                    "2. Translate the 'Rubric Feedback' into a highly specific, constructive question.\n"
+                    "3. Frame the question explicitly as an opportunity to 'elevate', 'strengthen', or 'flesh out' the narrative for maximum impact.\n"
+                    "4. Do NOT ask for a completely new matter. Focus ONLY on asking the Partner to provide the missing details (value, complexity, cross-border elements, etc.) to improve this specific description.\n"
+                )
+                prompt_vars = {
+                    "client_name": client_name,
+                    "matter_summary": matter_summary,
+                    "reason": reason,
+                    "confidentiality_instruction": confidentiality_instruction
                 }
 
             else:
@@ -387,4 +460,15 @@ def interrogator_node(state: AgentState) -> dict:
     # Better logging to see exactly what gap we are targeting
     updates["messages"].append(f"Interrogator node: Generated question for gap in field '{field}' and paused for Laravel.")
 
+    # =========================================================
+    # 🛡️ THE FRONTEND AMNESIA FIX (Safe Dictionary Extraction)
+    # =========================================================
+    if isinstance(state, dict):
+        updates["metadata"] = state.get("metadata", {})
+        updates["submission"] = state.get("submission", None)
+    else:
+        updates["metadata"] = getattr(state, "metadata", None)
+        updates["submission"] = getattr(state, "submission", None)
+
     return updates
+

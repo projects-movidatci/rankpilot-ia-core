@@ -12,16 +12,34 @@ def executive_writer_node(state: AgentState) -> Dict[str, Any]:
     """
     print("--- [NODE] Finalizing Executive Synthesis ---")
 
-    # 1. Extraer metadata y asegurar el nombre de la firma
+    # 1. Extraer metadata
     metadata = getattr(state, "metadata", {})
     submission_obj = getattr(state, "submission", None)
     
-    # Intenta sacar el nombre de metadata, si no, del submission, si no, genérico.
+    # =======================================================
+    # 🛡️ FIX: EXTRACCIÓN BLINDADA DEL FIRM NAME Y PRACTICE AREA
+    # Soporta tanto el esquema de Chambers como el de Legal 500
+    # =======================================================
     firm_name = "the Firm"
-    if metadata and getattr(metadata, "firm_name", ""):
-        firm_name = getattr(metadata, "firm_name")
-    elif submission_obj and hasattr(submission_obj, "identity") and submission_obj.identity.firm_name:
-        firm_name = submission_obj.identity.firm_name
+    practice_area = "General Law"
+    
+    # Priority 1: Metadata
+    if isinstance(metadata, dict):
+        firm_name = metadata.get("firm_name", firm_name)
+        practice_area = metadata.get("practice_area", practice_area)
+    elif hasattr(metadata, "firm_name"):
+        firm_name = getattr(metadata, "firm_name") or firm_name
+        practice_area = getattr(metadata, "practice_area") or practice_area
+        
+    # Priority 2: Submission Object (Chambers & Legal 500 Fallbacks)
+    if submission_obj:
+        sub_dict = submission_obj.model_dump(exclude_none=True)
+        if "A_preliminary_information" in sub_dict and sub_dict["A_preliminary_information"]:
+            firm_name = sub_dict["A_preliminary_information"].get("A1_firm_name", firm_name)
+            practice_area = sub_dict["A_preliminary_information"].get("A2_practice_area", practice_area)
+        elif "identity" in sub_dict and sub_dict["identity"]:
+            firm_name = sub_dict["identity"].get("firm_name", firm_name)
+            practice_area = sub_dict["identity"].get("practice_area", practice_area)
 
     # 2. Formatear las entradas complejas a texto legible para el LLM
     pos_core = getattr(state, "positioning_core", {})
@@ -34,7 +52,6 @@ def executive_writer_node(state: AgentState) -> Dict[str, Any]:
         f"STEP {i+1}: {getattr(step, 'action_title', step.get('action_title', '')) if isinstance(step, dict) else getattr(step, 'action_title', '')} ({getattr(step, 'category', step.get('category', '')) if isinstance(step, dict) else getattr(step, 'category', '')})\n"
         f"WHY: {getattr(step, 'why_it_matters', step.get('why_it_matters', '')) if isinstance(step, dict) else getattr(step, 'why_it_matters', '')}\n"
         f"HOW: {getattr(step, 'technical_instruction', step.get('technical_instruction', '')) if isinstance(step, dict) else getattr(step, 'technical_instruction', '')}\n"
-        # --- CAMBIO: Usamos target_completion_date ---
         f"TIMELINE: Must be completed by {getattr(step, 'target_completion_date', step.get('target_completion_date', 'N/A')) if isinstance(step, dict) else getattr(step, 'target_completion_date', 'N/A')}.\n"
         for i, step in enumerate(evolution_path)
     ]) if evolution_path else "No roadmap generated."
@@ -44,20 +61,41 @@ def executive_writer_node(state: AgentState) -> Dict[str, Any]:
         for bs in blind_spots
     ]) if blind_spots else "None identified."
 
+    # =======================================================
+    # 🧠 NEW: INYECTAR TAXONOMY ANALYTICS AL PAYLOAD
+    # =======================================================
+    strategic_context = getattr(state, "strategic_context", {})
+    taxonomy_analytics = strategic_context.get("taxonomy_analytics", {}) if isinstance(strategic_context, dict) else {}
+    
+    formatted_taxonomy = ""
+    if taxonomy_analytics:
+        cats = taxonomy_analytics.get("categories", [])
+        roles = taxonomy_analytics.get("roles", [])
+        comps = taxonomy_analytics.get("complexities", [])
+        formatted_taxonomy = (
+            f"\n\n--- HARD METRICS: TAXONOMY ANALYTICS ---\n"
+            f"Core Categories: {', '.join(cats) if cats else 'None'}\n"
+            f"Roles Played: {', '.join(roles) if roles else 'None'}\n"
+            f"Complexities Leveraged: {', '.join(comps) if comps else 'None'}"
+        )
+    
+    # We append the Taxonomy Analytics directly to the Positioning Core string
+    # so the LLM reads it as part of the technical audit.
+    pos_core_string = (json.dumps(pos_core) if isinstance(pos_core, dict) else str(pos_core)) + formatted_taxonomy
+
     current_date = datetime.date.today().strftime("%B %d, %Y")
 
     # 3. Preparar el Payload
     input_data = {
         "current_date": current_date,
         "firm_name": firm_name,
-        "practice_area": getattr(metadata, "practice_area", "General Law") if isinstance(metadata, dict) else "General Law",
-        "region": getattr(metadata, "region", "Global") if isinstance(metadata, dict) else "Global",
+        "practice_area": practice_area,
         "positioning_tier": json.dumps(pos_tier) if isinstance(pos_tier, dict) else str(pos_tier),
         "competitive_advantage": ", ".join(comp_adv) if comp_adv else "General Practice",
-        "gaps": "0 Structural Gaps (Fully optimized submission)", # En el Acto 3, los gaps físicos ya son cero
+        "gaps": "0 Structural Gaps (Fully optimized submission)", 
         "blind_spots": formatted_blind_spots,
         "evolution_path": formatted_path,
-        "positioning_core": json.dumps(pos_core) if isinstance(pos_core, dict) else str(pos_core),
+        "positioning_core": pos_core_string, # 👈 Modified Payload
         "history": "\n".join(getattr(state, "history", []))
     }
     
@@ -76,7 +114,7 @@ def executive_writer_node(state: AgentState) -> Dict[str, Any]:
                 "top_differentiators": comp_adv,
                 "audit_letter_markdown": response.audit_letter_markdown
             },
-            "current_step": "completed" # <-- FIX: Evita el TypeError de concatenación
+            "current_step": "completed"
         }
     except Exception as e:
         print(f"--- [ERROR] Executive Writer Node Failed: {str(e)} ---")

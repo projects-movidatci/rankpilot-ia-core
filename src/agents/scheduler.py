@@ -45,6 +45,7 @@ def scheduler_node(state: AgentState) -> Dict[str, Any]:
     
     # Formatear Blind Spots
     raw_blind_spots = getattr(state, "blind_spots", [])
+    print(f"Raw blind spots extracted for scheduler: {raw_blind_spots}")
     formatted_blind_spots = ""
     for bs in raw_blind_spots:
         issue = getattr(bs, 'issue', bs.get('issue', 'Unknown') if isinstance(bs, dict) else 'Unknown')

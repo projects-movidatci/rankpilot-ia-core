@@ -41,10 +41,10 @@ archetype_prompt = ChatPromptTemplate.from_template(
     [CONTEXT]
     - Practice Area: {practice_area}
     - Realistic Target: {realistic_target} 
-    - Submission Data: {submission_json}
+    - Submission Data (Includes Taxonomy Analytics): {submission_json}
     
     [YOUR MISSION]
-    1. Choose the archetype that best matches the firm's actual work.
+    1. Choose the archetype that best matches the firm's actual work (Use the Taxonomy Categories and Roles to inform this).
     2. Provide a brief justification.
     3. Generate 3 STRICT 'Narrative Guidelines'.
     
@@ -90,10 +90,11 @@ snapshot_prompt = ChatPromptTemplate.from_template(
 
     AUDIT PARAMETERS:
     - Practice Area: {practice_area}
-    - Optimized Submission Data: {submission_json}
+    - Optimized Submission Data (Includes Taxonomy Analytics at the very top): {submission_json}
 
     PHASE 1: THE TECHNICAL CORE 
     - Extract 3 hard evidence signals (deals, precedents, $$$) that strongly support their {selected_archetype} narrative.
+    - STRATEGIC REQUIREMENT: Strongly prefer evidence that aligns with the 'Categories' and 'Roles' listed in the TAXONOMY ANALYTICS.
 
     PHASE 2: THE TIER VERDICT
     - Assign a Tier: [Elite / Consolidated / Market Member].
@@ -104,7 +105,8 @@ snapshot_prompt = ChatPromptTemplate.from_template(
 
     PHASE 4: THE WEAPONS (2 Competitive Advantages)
     Identify exactly 2 structural or factual strengths that we can highlight in the final report.
-    
+    - CRITICAL COMMAND: You MUST leverage the 'Complexities Leveraged' and 'Firm Roles' listed in the TAXONOMY ANALYTICS to articulate exactly why this firm has a structural advantage over competitors.
+
     {format_instructions}
     """
 )

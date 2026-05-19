@@ -12,7 +12,10 @@ class OptimizedNarrative(BaseModel):
 narrative_prompt = ChatPromptTemplate.from_template(
     """
     SYSTEM: 
-    You are an Elite Legal Ghostwriter. Your job is to rewrite the firm's general narrative sections to sound like a 'Band 1' (Top Tier) market leader.
+    You are an Elite Legal Ghostwriter. Your job is to rewrite the firm's general narrative sections to perfectly align with their current market ranking trajectory.
+
+    STRATEGIC DIRECTIVE FOR THIS FIRM:
+    {strategic_directive}
 
     DIRECTORY RULES:
     {copywriting_guidelines}
@@ -21,8 +24,9 @@ narrative_prompt = ChatPromptTemplate.from_template(
     {narrative_json}
 
     INSTRUCTIONS:
-    Rewrite the narrative to be a powerful, cohesive thesis of the firm's market dominance. 
+    Rewrite the narrative to be a powerful, cohesive thesis. 
     Focus on institutional depth, market positioning, and strategic vision.
+    CRITICAL: Adopt the precise tone required in the STRATEGIC DIRECTIVE. If the firm is defending Band 1, sound established and dominant. If they are pushing up from Band 4, sound hungry, disruptive, and data-driven.
     Do NOT hallucinate facts. Elevate the vocabulary to premium British/US corporate English.
     """
 )
@@ -37,7 +41,10 @@ class OptimizedMatter(BaseModel):
 matter_prompt = ChatPromptTemplate.from_template(
     """
     SYSTEM: 
-    You are a specialized Legal 'Matter' Editor. You transform dry, passive case descriptions into aggressive, 'Band 1' market-moving achievements.
+    You are a specialized Legal 'Matter' Editor. You transform dry, passive case descriptions into aggressive, market-moving achievements tailored exactly to the firm's ranking goals.
+
+    STRATEGIC DIRECTIVE FOR THIS FIRM:
+    {strategic_directive}
 
     DIRECTORY RULES:
     {copywriting_guidelines}
@@ -45,17 +52,18 @@ matter_prompt = ChatPromptTemplate.from_template(
     CONFIDENTIALITY STATUS: {confidential_status}
     (If True, focus purely on the legal mechanics, structural complexity, and monetary value. Redact or generalize specific client names if the raw text asks for it).
 
-    RAW MATTER DATA:
+    RAW MATTER DATA (JSON):
     {matter_json}
 
-    INSTRUCTIONS:
-    1. RESTRUCTURE: Format the description into three clear, highly scannable paragraphs: 
+    CRITICAL INSTRUCTIONS FOR REWRITE:
+    1. STRATEGIC INTEGRATION: You will see 'editorial_feedback' and 'partner_additional_notes'. You MUST seamlessly weave the partner's new notes into the original description to fix the weaknesses.
+    2. ALIGN WITH TARGET: Write the narrative to prove the 'STRATEGIC GOAL FOR THIS SUBMISSION' provided above.
+    3. RESTRUCTURE: Format the description into three clear, highly scannable paragraphs: 
        - The Commercial/Legal Challenge.
-       - The Firm's Strategic Role/Maneuver.
+       - The Firm's Strategic Role/Maneuver (Explicitly highlighting the 'firm_role_taxonomy' and 'complexity_indicators' found in the JSON).
        - The Market Impact/Value.
-    2. TONE: Use active, powerful verbs (e.g., 'Spearheaded', 'Engineered', 'Neutralized', 'Architected'). Eliminate passive voice completely.
-    3. FACTS: Retain all specific monetary values, jurisdictions, and dates. Do NOT invent data.
-    4. LENGTH: Keep it punchy. Executives value density over length.
+    4. TONE: Use active, powerful verbs (e.g., 'Spearheaded', 'Engineered', 'Architected'). Eliminate passive voice completely.
+    5. FACTS: Retain all specific monetary values, jurisdictions, and dates. Do NOT invent data.
     """
 )
 matter_chain = matter_prompt | get_llm(temperature=0.3).with_structured_output(OptimizedMatter)

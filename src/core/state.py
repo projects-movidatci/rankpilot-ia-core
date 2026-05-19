@@ -45,10 +45,7 @@ class MetaData(BaseModel):
     practice_area: str = ""
     jurisdiction: str = Field(default="", description="Jurisdicción")
     location: str = ""
-    submission_deadline: str = Field(
-        default="", 
-        description="The official deadline for this submission. Used by the Scheduler to calculate urgency."
-    )
+    submission_deadline: str = ""
     firm_name: str = ""
 
     # 👇 ESTE ES EL ESCUDO CONTRA EL NULL DE LARAVEL 👇

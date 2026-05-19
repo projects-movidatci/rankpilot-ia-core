@@ -43,6 +43,8 @@ def classification_node(state: AgentState) -> dict:
     decoded_file_paths = getattr(state, "decoded_file_paths", []) or []
     b64_docs = getattr(state, "base64_documents", [])
     extracted_text = getattr(state, "extracted_text", "") or ""
+    metadata = getattr(state, "metadata", {}) or {}
+    print(f"Preparation Node: Initial metadata state: {metadata}")
     
     if extracted_text.strip():
         updates["messages"].append("Preparation node: Successfully received raw text from Laravel.")

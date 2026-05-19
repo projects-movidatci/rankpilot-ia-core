@@ -14,8 +14,11 @@ from src.agents.scheduler import scheduler_node
 from src.agents.chambers_ingestion import chambers_ingestion_node
 from src.agents.legal500_ingestion import legal500_ingestion_node
 
-# --- ACTO 2: Pulido y Ensamblaje (NUEVO) ---
-# Usaremos un placeholder para importarlo cuando lo creemos
+# --- ACTO 1.5: Strategic Analysis (NUEVO) ---
+from src.agents.taxonomy import taxonomy_node
+from src.agents.rubric_evaluator import rubric_evaluator_node, final_evaluation_node
+
+# --- ACTO 2: Pulido y Ensamblaje ---
 from src.agents.optimizer import optimize_node 
 from src.agents.assembler import assembly_node
 
@@ -34,44 +37,56 @@ def route_entry(state: AgentState) -> Literal["process_answer_node", "classifica
         return "process_answer_node"
     return "classification_node"
 
-def route_after_audit(state: AgentState) -> Literal["interrogator_node", "optimize_node"]:
+def route_after_audit(state: AgentState) -> str:
     """
-    EL PUENTE ENTRE EL ACTO 1 Y EL ACTO 2:
-    Si hay 'gaps', pausamos y preguntamos al usuario.
-    Si hay 0 gaps (o si se fuerza la auditoría), pasamos a la fase de optimización.
+    The Master Traffic Controller.
+    Decides the next node based on gaps, tactical commands, and analysis status.
     """
-    gaps = getattr(state, "gaps", []) or []
-    # Nota: Aquí podríamos agregar 'or state.config.get("force_audit")' si quieres ese botón
-    if len(gaps) > 0:
-        return "interrogator_node"
+    gaps = getattr(state, "gaps", [])
     
-    # 0 Gaps: El submission está "crudo" pero completo. ¡A optimizar!
-    return "optimize_node"
+    # 🧠 THE SAFE FIX: Read from dictionary
+    ctx = getattr(state, "strategic_context", {})
+    trigger_analysis = ctx.get("trigger_analysis", False)
+    is_analyzed = ctx.get("is_strategically_analyzed", False)
+
+    # 1. THE EXPLICIT COMMAND
+    if trigger_analysis:
+        print("🚦 ROUTING: Tactical command received. Routing to Strategic Analysis.")
+        return "taxonomy_node"
+
+    # 2. THE AUTO-TRIGGER
+    if len(gaps) == 0 and not is_analyzed:
+        print("🚦 ROUTING: 0 Structural gaps found. Auto-triggering Strategic Analysis.")
+        return "taxonomy_node"
+
+    # 3. THE GAPS EXIST
+    if len(gaps) > 0:
+        print(f"🚦 ROUTING: {len(gaps)} gaps remain. Routing to Interrogator.")
+        return "interrogator_node"
+
+    # 4. THE FINISH LINE
+    if len(gaps) == 0 and is_analyzed:
+        print("🚦 ROUTING: 0 gaps and analysis complete. Advancing to Act 2 (Optimization).")
+        return "optimize_node"
+
+    # Fallback safety
+    return "interrogator_node"
 
 def route_after_classification(state: AgentState) -> Literal["chambers_ingestion_node", "legal500_ingestion_node", "generic_ingestion_node"]:
-    # 1. Obtenemos el tipo detectado por la IA
-    # Si usamos 'updates' en el nodo, LangGraph lo mete al state para el siguiente paso.
     doc_type = getattr(state, "input_document_type", "unknown_draft")
     
-    # 2. Obtenemos lo que marcó el usuario (Metadata)
     metadata = getattr(state, "metadata", None)
     target_directory = ""
     if metadata:
         target_directory = str(getattr(metadata, "directory", "") or "").lower()
 
-    # ==========================================
-    # LOGS DE DIAGNÓSTICO (Míralos en la consola)
-    # ==========================================
     print(f"\n--- DEBUG ROUTER ---")
     print(f"🤖 IA DETECTÓ (doc_type): '{doc_type}'")
     print(f"👤 USUARIO ELIGIÓ (target_directory): '{target_directory}'")
     print(f"--------------------\n")
 
-    # REGLA CHAMBERS
     if doc_type == "chambers_submission" and "chambers" in target_directory:
         return "chambers_ingestion_node"
-
-    # REGLA LEGAL 500
     elif doc_type == "legal500_submission" and ("legal" in target_directory or "500" in target_directory):
         return "legal500_ingestion_node"
 
@@ -96,8 +111,13 @@ def build_workflow() -> StateGraph:
     workflow.add_node("audit_node", audit_node)
     workflow.add_node("interrogator_node", interrogator_node)
     
+    # Acto 1.5 (Strategic Analysis)
+    workflow.add_node("taxonomy_node", taxonomy_node)
+    workflow.add_node("rubric_evaluator_node", rubric_evaluator_node)
+    
     # Acto 2
     workflow.add_node("optimize_node", optimize_node)
+    workflow.add_node("final_evaluation_node", final_evaluation_node)
     workflow.add_node("assembly_node", assembly_node)
     
     # Acto 3
@@ -119,8 +139,6 @@ def build_workflow() -> StateGraph:
     )
 
     # --- ACTO 1: EL BUCLE DE CAPTURA ---
-    
-    # ¡NUEVO! Conectamos el clasificador con los extractores usando tu enrutador
     workflow.add_conditional_edges(
         "classification_node",
         route_after_classification,
@@ -131,7 +149,6 @@ def build_workflow() -> StateGraph:
         }
     )
 
-    # Los 3 extractores convergen en el sanitizer
     workflow.add_edge("chambers_ingestion_node", "sanitizer_node")
     workflow.add_edge("legal500_ingestion_node", "sanitizer_node")
     workflow.add_edge("generic_ingestion_node", "sanitizer_node")
@@ -139,23 +156,30 @@ def build_workflow() -> StateGraph:
     workflow.add_edge("process_answer_node", "sanitizer_node")
     workflow.add_edge("sanitizer_node", "audit_node")
 
-    # Condicional: ¿Seguimos preguntando o pasamos a optimizar?
+    # Condicional: ¿Preguntamos, analizamos, o pasamos a optimizar?
     workflow.add_conditional_edges(
         "audit_node",
         route_after_audit,
         {
-            "interrogator_node": "interrogator_node",  # Pausa el grafo
+            "interrogator_node": "interrogator_node",  # Pausa el grafo para Input
+            "taxonomy_node": "taxonomy_node",          # Entra a fase estratégica
             "optimize_node": "optimize_node"           # Avanza al Acto 2
         }
     )
-    workflow.add_edge("interrogator_node", END) # Laravel toma el control aquí
+    workflow.add_edge("interrogator_node", END) 
+
+    # --- ACTO 1.5: DIAGNÓSTICO ESTRATÉGICO ---
+    # Una vez que entra a Taxonomía, pasa a Rúbrica, y vuelve al Auditor para recalcular gaps
+    workflow.add_edge("taxonomy_node", "rubric_evaluator_node")
+    workflow.add_edge("rubric_evaluator_node", "audit_node")
 
     # --- ACTO 2: GHOSTWRITER Y ENSAMBLAJE ---
-    workflow.add_edge("optimize_node", "assembly_node")
+    workflow.add_edge("optimize_node", "final_evaluation_node") # 👈 UPDATED
+    workflow.add_edge("final_evaluation_node", "assembly_node")
     workflow.add_edge("assembly_node", "snapshot_generator_node")
     workflow.add_edge("snapshot_generator_node", "scheduler_node")
 
-    # --- ACTO 3: DIAGNÓSTICO ESTRATÉGICO ---
+    # --- ACTO 3: REPORTE FINAL ---
     workflow.add_edge("scheduler_node", "executive_writer_node")
     workflow.add_edge("executive_writer_node", END)
 

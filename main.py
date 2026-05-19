@@ -18,7 +18,7 @@ JOBS_DB = {}
 # 1. Estructura del Payload
 class AgentStatePayload(BaseModel):
     submission_id: Optional[str] = ""
-    metadata: Optional[Dict[str, Any]] = None # ¡Clave para el Acto 1!
+    metadata: Optional[Dict[str, Any]] = None 
     base64_documents: List[Dict[str, str]] = []
     decoded_file_paths: List[str] = []
     raw_input_text: str = ""
@@ -34,6 +34,8 @@ class AgentStatePayload(BaseModel):
     messages: List[str] = []
     current_step: str = ""
     errors: List[str] = []
+    # 🛡️ THE FIX: Allow our safe dictionary through the API
+    strategic_context: Dict[str, Any] = {}
 
 # --- 2. EL WORKER EN SEGUNDO PLANO (La magia de LangGraph) ---
 def run_workflow_task(job_id: str, initial_state: dict, config: dict):
@@ -43,20 +45,32 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
         
         # Mapeo visual de progreso basado en los nodos de LangGraph
         progress_map = {
-            # --- ACTO 1 (El embudo hasta el Chat) ---
-            "classification_node": {"p": 10, "msg": "Extracting and classifying document..."},
-            "process_answer_node": {"p": 15, "msg": "Analyzing Partner's strategic input..."},
-            "ingestion_node": {"p": 30, "msg": "Mapping data to universal schema..."},
-            "sanitizer_node": {"p": 50, "msg": "Sanitizing and elevating narrative..."},
-            "audit_node": {"p": 80, "msg": "Auditing submission for strategic gaps..."},
-            "interrogator_node": {"p": 100, "msg": "Audit paused. Ready for Q&A."},
+            # --- ACTO 1 (The Intake & Audit Loop) ---
+            "classification_node": {"p": 5, "msg": "Extracting and classifying document..."},
+            "process_answer_node": {"p": 10, "msg": "Integrating Partner's strategic input..."},
             
-            # --- ACTO 2 y 3 (El embudo hacia el Diagnóstico Final) ---
-            "optimize_node": {"p": 25, "msg": "Optimizing strategic narrative..."},
-            "assembly_node": {"p": 45, "msg": "Assembling the final document..."},
-            "snapshot_generator_node": {"p": 65, "msg": "Generating strategic audit snapshot..."},
-            "scheduler_node": {"p": 80, "msg": "Building roadmap and timeline..."},
-            "executive_writer_node": {"p": 95, "msg": "Drafting final executive letter..."}
+            # Ingestion Nodes
+            "chambers_ingestion_node": {"p": 15, "msg": "Mapping Chambers raw data to universal schema..."},
+            "legal500_ingestion_node": {"p": 15, "msg": "Mapping Legal 500 raw data to universal schema..."},
+            "generic_ingestion_node": {"p": 15, "msg": "Mapping raw data to universal schema..."},
+            
+            "sanitizer_node": {"p": 25, "msg": "Sanitizing preliminary narrative..."},
+            
+            # --- ACTO 1.5 (Strategic Diagnosis) ---
+            "taxonomy_node": {"p": 40, "msg": "Performing strategic taxonomy and complexity analysis..."},
+            "rubric_evaluator_node": {"p": 55, "msg": "Scoring matters against the 100-point rubric..."},
+            
+            "audit_node": {"p": 70, "msg": "Auditing submission for strategic gaps..."},
+            "interrogator_node": {"p": 100, "msg": "Audit paused. Ready for Q&A."}, # Pauses the system for Laravel
+            
+            # --- ACTO 2 y 3 (The Ghostwriter & Executive Assembly) ---
+            # If 0 gaps, it flows directly from Audit (70%) to Optimize (80%)
+            "optimize_node": {"p": 80, "msg": "Ghostwriting and optimizing matter narratives..."},
+            "final_evaluation_node": {"p": 83, "msg": "Final evaluation of matter scores..."},
+            "assembly_node": {"p": 86, "msg": "Assembling the final structured document..."},
+            "snapshot_generator_node": {"p": 90, "msg": "Generating strategic intelligence snapshot..."},
+            "scheduler_node": {"p": 95, "msg": "Building roadmap and evolution timeline..."},
+            "executive_writer_node": {"p": 100, "msg": "Drafting final executive letter..."}
         }
 
         # Ejecutamos con .stream() para ir nodo por nodo
@@ -73,6 +87,14 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
                 else:
                     JOBS_DB[job_id]["message"] = f"Processing {node_name}..."
 
+        # Helper para garantizar serialización JSON segura
+        def safe_dump(obj):
+            if hasattr(obj, 'model_dump'):
+                return obj.model_dump(exclude_none=True)
+            if isinstance(obj, list):
+                return [safe_dump(i) for i in obj]
+            return obj
+
         # Al terminar, preparamos el JSON final para enviar a Laravel
         sub = final_state.get("submission")
         sub_dict = sub.model_dump() if hasattr(sub, 'model_dump') else None
@@ -88,18 +110,24 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
         else:
             metadata_final = {}
         final_agent_state = {
-            "submission_id": final_state.get("submission_id"), # <-- AÑADIDO: Vital para Laravel
-            "next_node": final_state.get("next_node"),         # <-- AÑADIDO: El ruteo
+            "submission_id": final_state.get("submission_id"),
+            "next_node": final_state.get("next_node"),
             "metadata": metadata_final,
             "submission": sub_dict,
-            "gaps": final_state.get("gaps", []),               # <-- Aquí viajan los gaps
+            "gaps": final_state.get("gaps", []),
             "dismissed_gaps": final_state.get("dismissed_gaps", []),
             "questions": final_state.get("questions", []),
-            "new_answer": final_state.get("new_answer", {}),   # <-- CORREGIDO: Ya no borra la pregunta
+            "new_answer": final_state.get("new_answer", {}),
             "output_base64": final_state.get("output_base64"),
             "evolution_path": final_state.get("evolution_path", []),
             "executive_summary": exec_summary_dict,
-            "errors": final_state.get("errors", [])
+            "errors": final_state.get("errors", []),
+            # 🛡️ THE FIX: Send the tactical flags back to the frontend
+            "strategic_context": final_state.get("strategic_context", {}),
+            "positioning_core": safe_dump(final_state.get("positioning_core", {})),
+            "positioning_tier": safe_dump(final_state.get("positioning_tier", {})),
+            "blind_spots": safe_dump(final_state.get("blind_spots", [])),
+            "competitive_advantage": safe_dump(final_state.get("competitive_advantage", []))
         }
 
         JOBS_DB[job_id]["progress"] = 100
@@ -146,15 +174,8 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
         # Parseo de Metadata
         raw_metadata = state_data.get("metadata", {})
         try:
-            meta_obj = MetaData(
-                directory=raw_metadata.get("directory"),
-                guide=raw_metadata.get("guide", ""),
-                region=raw_metadata.get("region", ""),
-                jurisdiction=raw_metadata.get("jurisdiction", ""),
-                practice_area=raw_metadata.get("practice_area", ""),
-                firm_name=raw_metadata.get("firm_name", ""),
-                location=raw_metadata.get("location", "")
-            )
+            # 🛡️ THE FIX: **raw_metadata automatically injects ALL keys (including the deadline)
+            meta_obj = MetaData(**raw_metadata)
         except Exception as e:
             print(f"⚠️ Error construyendo MetaData object: {e}")
             meta_obj = None
@@ -164,18 +185,16 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
             "metadata": meta_obj,
             "base64_documents": state_input.base64_documents,
             "target_submission_type": state_input.target_submission_type,
-            
-            # --- 2. LOS CABLES PERDIDOS QUE CONECTAN CON LARAVEL ---
             "input_document_type": state_input.input_document_type,
-            "raw_text": state_input.raw_input_text, # Mapeamos raw_input_text a raw_text
-            "extracted_text": state_input.raw_input_text, # Inyectamos directamente para el classifier
-            # -------------------------------------------------------
-            
+            "raw_text": state_input.raw_input_text, 
+            "extracted_text": state_input.raw_input_text, 
             "submission": sub_model,
             "gaps": state_input.gaps,
             "dismissed_gaps": state_input.dismissed_gaps,
             "new_answer": state_input.new_answer,
-            "errors": state_input.errors
+            "errors": state_input.errors,
+            # 🛡️ THE FIX: Pass the context into LangGraph
+            "strategic_context": state_input.strategic_context 
         }
         config = {"configurable": {"thread_id": thread_id}}
 
