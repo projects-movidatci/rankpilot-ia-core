@@ -3,6 +3,10 @@ from typing import Literal
 
 from src.core.state import AgentState
 
+# --- ACTO 0: Matters Assistant (NUEVO) ---
+from src.agents.MA_ingestion_node import matters_assistant_ingestion_node
+from src.agents.MA_extractor_node import matters_assistant_extractor_node
+
 # --- ACTO 1: Captura de Datos (Submissions Core) ---
 from src.agents.extractor import ingestion_node
 from src.agents.classifier import classification_node
@@ -14,12 +18,12 @@ from src.agents.scheduler import scheduler_node
 from src.agents.chambers_ingestion import chambers_ingestion_node
 from src.agents.legal500_ingestion import legal500_ingestion_node
 
-# --- ACTO 1.5: Strategic Analysis (NUEVO) ---
+# --- ACTO 1.5: Strategic Analysis ---
 from src.agents.taxonomy import taxonomy_node
 from src.agents.rubric_evaluator import rubric_evaluator_node, final_evaluation_node
 
 # --- ACTO 2: Pulido y Ensamblaje ---
-from src.agents.optimizer import optimize_node 
+from src.agents.optimizer import optimize_node, matters_assistant_optimize_node
 from src.agents.assembler import assembly_node
 
 # --- ACTO 3: Diagnóstico Estratégico (RankPilot Engine) ---
@@ -44,7 +48,8 @@ def route_after_audit(state: AgentState) -> str:
     """
     gaps = getattr(state, "gaps", [])
     
-    # 🧠 THE SAFE FIX: Read from dictionary
+    target = getattr(state, "target_submission_type", "")
+    
     ctx = getattr(state, "strategic_context", {})
     trigger_analysis = ctx.get("trigger_analysis", False)
     is_analyzed = ctx.get("is_strategically_analyzed", False)
@@ -53,6 +58,14 @@ def route_after_audit(state: AgentState) -> str:
     if trigger_analysis:
         print("🚦 ROUTING: Tactical command received. Routing to Strategic Analysis.")
         return "taxonomy_node"
+    
+    # =======================================================
+    # 🛡️ THE ACT 0 KILL SWITCH
+    # If the Matters Assistant has 0 gaps, end the graph immediately.
+    # =======================================================
+
+    if target == "MattersAssistant" and len(gaps) == 0:
+        return "MA_optimize_node" # 👈 CAMBIO AQUÍ
 
     # 2. THE AUTO-TRIGGER
     if len(gaps) == 0 and not is_analyzed:
@@ -63,6 +76,8 @@ def route_after_audit(state: AgentState) -> str:
     if len(gaps) > 0:
         print(f"🚦 ROUTING: {len(gaps)} gaps remain. Routing to Interrogator.")
         return "interrogator_node"
+    
+    
 
     # 4. THE FINISH LINE
     if len(gaps) == 0 and is_analyzed:
@@ -72,7 +87,8 @@ def route_after_audit(state: AgentState) -> str:
     # Fallback safety
     return "interrogator_node"
 
-def route_after_classification(state: AgentState) -> Literal["chambers_ingestion_node", "legal500_ingestion_node", "generic_ingestion_node"]:
+# 🛡️ THE FIX: Added "MA_ingestion_node" to the Literal types
+def route_after_classification(state: AgentState) -> Literal["chambers_ingestion_node", "legal500_ingestion_node", "generic_ingestion_node", "MA_ingestion_node"]:
     doc_type = getattr(state, "input_document_type", "unknown_draft")
     
     metadata = getattr(state, "metadata", None)
@@ -85,12 +101,17 @@ def route_after_classification(state: AgentState) -> Literal["chambers_ingestion
     print(f"👤 USUARIO ELIGIÓ (target_directory): '{target_directory}'")
     print(f"--------------------\n")
 
+    # 🛡️ THE FIX: Act 0 Bypass Route
+    if doc_type == "raw_batch":
+        return "MA_ingestion_node"
+
     if doc_type == "chambers_submission" and "chambers" in target_directory:
         return "chambers_ingestion_node"
     elif doc_type == "legal500_submission" and ("legal" in target_directory or "500" in target_directory):
         return "legal500_ingestion_node"
 
     return "generic_ingestion_node"
+
 
 def build_workflow() -> StateGraph:
     """
@@ -101,6 +122,10 @@ def build_workflow() -> StateGraph:
     # ------------------------------------------
     # REGISTRO DE NODOS
     # ------------------------------------------
+    # Acto 0 (Matters Assistant)
+    workflow.add_node("MA_ingestion_node", matters_assistant_ingestion_node)
+    workflow.add_node("MA_extractor_node", matters_assistant_extractor_node)
+
     # Acto 1
     workflow.add_node("classification_node", classification_node)
     workflow.add_node("chambers_ingestion_node", chambers_ingestion_node)
@@ -117,6 +142,7 @@ def build_workflow() -> StateGraph:
     
     # Acto 2
     workflow.add_node("optimize_node", optimize_node)
+    workflow.add_node("MA_optimize_node", matters_assistant_optimize_node)
     workflow.add_node("final_evaluation_node", final_evaluation_node)
     workflow.add_node("assembly_node", assembly_node)
     
@@ -138,21 +164,27 @@ def build_workflow() -> StateGraph:
         }
     )
 
-    # --- ACTO 1: EL BUCLE DE CAPTURA ---
+    # --- ACTO 1: EL BUCLE DE CAPTURA Y ENRUTAMIENTO ---
     workflow.add_conditional_edges(
         "classification_node",
         route_after_classification,
         {
             "chambers_ingestion_node": "chambers_ingestion_node",
             "legal500_ingestion_node": "legal500_ingestion_node",
-            "generic_ingestion_node": "generic_ingestion_node"
+            "generic_ingestion_node": "generic_ingestion_node",
+            "MA_ingestion_node": "MA_ingestion_node" # 👈 NEW ROUTE
         }
     )
 
+    # Flujo Estándar (Firm-Wide Submissions)
     workflow.add_edge("chambers_ingestion_node", "sanitizer_node")
     workflow.add_edge("legal500_ingestion_node", "sanitizer_node")
     workflow.add_edge("generic_ingestion_node", "sanitizer_node")
     
+    # Flujo Acto 0 (Matters Assistant)
+    workflow.add_edge("MA_ingestion_node", "MA_extractor_node")
+    workflow.add_edge("MA_extractor_node", "audit_node") # 👈 Directly to Auditor!
+
     workflow.add_edge("process_answer_node", "sanitizer_node")
     workflow.add_edge("sanitizer_node", "audit_node")
 
@@ -163,18 +195,19 @@ def build_workflow() -> StateGraph:
         {
             "interrogator_node": "interrogator_node",  # Pausa el grafo para Input
             "taxonomy_node": "taxonomy_node",          # Entra a fase estratégica
-            "optimize_node": "optimize_node"           # Avanza al Acto 2
+            "optimize_node": "optimize_node",           # Avanza al Acto 2
+            "MA_optimize_node": "MA_optimize_node"
         }
     )
     workflow.add_edge("interrogator_node", END) 
 
     # --- ACTO 1.5: DIAGNÓSTICO ESTRATÉGICO ---
-    # Una vez que entra a Taxonomía, pasa a Rúbrica, y vuelve al Auditor para recalcular gaps
     workflow.add_edge("taxonomy_node", "rubric_evaluator_node")
     workflow.add_edge("rubric_evaluator_node", "audit_node")
 
     # --- ACTO 2: GHOSTWRITER Y ENSAMBLAJE ---
-    workflow.add_edge("optimize_node", "final_evaluation_node") # 👈 UPDATED
+    workflow.add_edge("MA_optimize_node", "assembly_node")
+    workflow.add_edge("optimize_node", "final_evaluation_node")
     workflow.add_edge("final_evaluation_node", "assembly_node")
     workflow.add_edge("assembly_node", "snapshot_generator_node")
     workflow.add_edge("snapshot_generator_node", "scheduler_node")

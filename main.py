@@ -7,7 +7,7 @@ import uuid
 import sys
 from src.core.workflow import build_workflow
 from src.core.state import AgentState, MetaData
-from src.core.schemas import Legal500Submission, ChambersSubmission
+from src.core.schemas import Legal500Submission, ChambersSubmission, SingleMatterExtraction
 
 api = FastAPI(title="RankPilot API")
 
@@ -169,20 +169,30 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
                 sub_model = Legal500Submission(**submission_data)
             elif target in ["Chambers", "Chambers and Partners"]:
                 sub_model = ChambersSubmission(**submission_data)
+            elif target == "MattersAssistant":  # 👈 THE MISSING DOOR
+                sub_model = SingleMatterExtraction(**submission_data)
                 
 
         # Parseo de Metadata
         raw_metadata = state_data.get("metadata", {})
+        if raw_metadata is None:
+            raw_metadata = {}
+            
+        # 🧹 SANITIZADOR PREVENTIVO: Evitar que Pydantic colapse al intentar validar un archivo vacío
+        if "file_base64" in raw_metadata and not raw_metadata.get("file_base64"):
+            del raw_metadata["file_base64"]
         try:
-            # 🛡️ THE FIX: **raw_metadata automatically injects ALL keys (including the deadline)
+            # 🛡️ THE FIX: Extraemos a diccionario limpio
             meta_obj = MetaData(**raw_metadata)
+            meta_input = meta_obj.model_dump(exclude_none=True)
         except Exception as e:
             print(f"⚠️ Error construyendo MetaData object: {e}")
-            meta_obj = None
+            # 🚑 EL SALVAVIDAS: Si Pydantic falla, pasamos el diccionario crudo. ¡NUNCA None!
+            meta_input = raw_metadata
 
         initial_state = {
             "submission_id": state_input.submission_id,
-            "metadata": meta_obj,
+            "metadata": meta_input,
             "base64_documents": state_input.base64_documents,
             "target_submission_type": state_input.target_submission_type,
             "input_document_type": state_input.input_document_type,

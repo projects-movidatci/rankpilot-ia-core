@@ -71,6 +71,8 @@ def audit_node(state: AgentState) -> dict:
         "cross_border_complexity": 10, "innovation_novelty": 10, "narrative_strength": 10
     }
 
+    print(f"submission data arrived at audit node: {str(submission_data)[:500]}...")  # Debug print to check submission content
+
     if submission_data:
         # Helper function to process matters dynamically
         def evaluate_matters_for_gaps(matters_list, section_path):
@@ -103,7 +105,7 @@ def audit_node(state: AgentState) -> dict:
         conf_info = getattr(submission_data, "E_confidential_information", None)
         if conf_info and getattr(conf_info, "confidential_matters", None):
             evaluate_matters_for_gaps(conf_info.confidential_matters, "E_confidential_information.confidential_matters")
-
+    print(f"filtered structural gaps: {filtered_gaps}")
     # Combine structural data gaps with strategic narrative gaps
     active_gaps = filtered_gaps + strategic_gaps
 

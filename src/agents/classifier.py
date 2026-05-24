@@ -44,7 +44,35 @@ def classification_node(state: AgentState) -> dict:
     b64_docs = getattr(state, "base64_documents", [])
     extracted_text = getattr(state, "extracted_text", "") or ""
     metadata = getattr(state, "metadata", {}) or {}
+    current_target = getattr(state, "target_submission_type", None)
     print(f"Preparation Node: Initial metadata state: {metadata}")
+
+    # =========================================================
+    # 🛡️ THE FIX: MATTERS ASSISTANT BYPASS (ACT 0)
+    # =========================================================
+    if current_target.lower() in ["mattersassistant", "matter_assistant", "matterassistant"]:
+        updates["messages"].append("Preparation node: Matters Assistant detected. Bypassing standard LLM classification.")
+        
+        # Set a unique document type so the router knows exactly where to send it
+        updates["input_document_type"] = "raw_batch"
+        
+        # Load the dedicated single-matter YAML config directly
+        try:
+            config_path = "configs/chambers_matter.yaml" 
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    yaml_config = yaml.safe_load(f)
+                    updates["config"] = yaml_config or {}
+                    updates["messages"].append(f"Preparation node: Loaded config {config_path}")
+            else:
+                updates["messages"].append(f"⚠️ Warning: {config_path} not found.")
+                updates["config"] = {}
+        except Exception as e:
+            print(f"❌ Error loading Matters Assistant YAML: {e}")
+            updates["config"] = {}
+            
+        # Return immediately! Skip the rest of the node.
+        return updates
     
     if extracted_text.strip():
         updates["messages"].append("Preparation node: Successfully received raw text from Laravel.")

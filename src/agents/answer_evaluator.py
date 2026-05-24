@@ -205,6 +205,7 @@ def process_answer_node(state: AgentState) -> dict:
             updates["messages"].append(f"DEBUG: Valor extraído por LLM: {str(result.extracted_value)[:100]}...")
             
             print(f"Answer Evaluator: Attempting to fill '{target_field}' with extracted value.")
+            print(f"extracted_value (first 100 chars): {str(result.extracted_value)[:100]}...")
 
             if target_field.startswith("metadata."):
                 meta_key = target_field.split(".")[1]
@@ -231,11 +232,13 @@ def process_answer_node(state: AgentState) -> dict:
                 
                 updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
                 return updates
+            
+            print(f"submission before update: {str(submission)[:500]}...")
 
             if submission:
                 sub_dict = submission.model_dump()
                 val_to_inject = result.extracted_value
-                
+                print(f"sub_dict before injection: {str(sub_dict)[:500]}...")
                 try:
                     val_to_inject = json.loads(val_to_inject)
                 except (json.JSONDecodeError, TypeError):

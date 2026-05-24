@@ -1,0 +1,77 @@
+# ==========================================
+# CHAMBERS - SINGLE MATTER ASSISTANT (ACT 0)
+# ==========================================
+name: "Chambers - Matters Assistant"
+target_submission_type: "MattersAssistant"
+template_file: "chambers_single_matter_template.docx"
+
+# ---------------------------------------------------------
+# THE EDITORIAL AI BRAIN (Incorporating Ángela's Rules)
+# ---------------------------------------------------------
+copywriting_guidelines: |
+  CRITICAL EDITORIAL RULES FOR DRAFTING FROM SCRATCH:
+  You are an elite Magic Circle consulting architect writing a single matter for a Chambers directory submission based on raw, unstructured data.
+  
+  1. NO CREATIVE INFERENCE (ABSOLUTE RULE): You must rely strictly on the provided facts. Do not guess roles, do not infer ownership, and do not invent timelines. If a fact is missing, leave the field null or write around it elegantly.
+  2. NO META-COMMENTS: Never leave internal notes or verbalize missing information in the final text (e.g., NEVER write "The document does not specify...").
+  3. MAGIC CIRCLE TONE: The prose must sound effortless, precise, sophisticated, and market-facing. Purge overly legalistic or contract-drafting language. DO NOT use generic terms like "the borrower" or "the facility" unless strictly necessary.
+  4. INJECT BUSINESS CONTEXT: Elevate the client's market position if the context allows (e.g., "advised one of the leading food distributors in Latin America").
+  5. HIGHLIGHT LAWYER CAPITAL: You must explicitly map specific partner names to active leadership verbs in the summary (e.g., "Fernando Eraña structured...", "Jorge Labastida orchestrated...").
+
+# ---------------------------------------------------------
+# THE AUDIT RULEBOOK
+# The auditor checks these to see if the lawyer forgot crucial facts.
+# ---------------------------------------------------------
+required_fields:
+  - "matter.is_confidential"
+  - "matter.client_name"
+  - "matter.matter_value"
+  - "matter.date_completion_or_status"
+  - "matter.lead_partners"
+  - "matter.other_team_members"
+  - "matter.other_firms_advising"
+  - "matter.cross_border_jurisdictions"
+  - "matter.summary_of_matter_and_role"
+
+# ---------------------------------------------------------
+# THE SCHEMA DEFINITION
+# LangChain uses this to dynamically build the Pydantic extraction model.
+# ---------------------------------------------------------
+schema:
+  name: "Single Matter Extraction"
+  description: "Extracts unstructured batch data into a single, fully populated Chambers matter format."
+  
+  sections:
+    matter:
+      description: "The consolidated facts and narrative for a single legal matter."
+      fields:
+        is_confidential:
+          description: "BOOLEAN: True if the raw notes explicitly mention confidentiality, secrecy, or say 'do not publish'. False if public."
+          type: "boolean"
+        matter_title:
+          description: "A short, professional title for the matter (e.g., 'Restructuring of Grupo Concord')."
+          type: "string"
+        client_name: 
+          description: "The exact name of the client being advised."
+          type: "string"
+        matter_value: 
+          description: "The exact financial scale or value of the matter (e.g., 'USD 120 million')."
+          type: "string"
+        date_completion_or_status: 
+          description: "The closing date or current status (e.g., 'Closed in Q3 2025', 'Ongoing')."
+          type: "string"
+        lead_partners: 
+          description: "List of the specific partner(s) leading the mandate."
+          type: "list of strings"
+        other_team_members: 
+          description: "List of other associates or counsels involved in the matter."
+          type: "list of strings"
+        other_firms_advising: 
+          description: "Any other law firms mentioned in the notes, and who they advised (e.g., 'Latham & Watkins advising the lenders')."
+          type: "list of strings"
+        cross_border_jurisdictions:
+          description: "A list of any foreign jurisdictions or international elements explicitly mentioned."
+          type: "list of strings"
+        summary_of_matter_and_role: 
+          description: "The core narrative (250-400 words) of the transaction, its complexity, and the firm's exact legal role. Draft this using the copywriting guidelines."
+          type: "string"

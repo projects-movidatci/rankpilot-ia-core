@@ -82,6 +82,14 @@ def assembly_node(state: AgentState) -> dict:
         raw_firm_name = section_a.get("A1_firm_name") or "Unknown_Firm"
         raw_practice_area = section_a.get("A2_practice_area") or "Unknown_Practice"
     
+    elif sub_type == "MattersAssistant":
+        if isinstance(metadata, dict):
+            raw_firm_name = metadata.get("firm_name") or "Unknown_Firm"
+            raw_practice_area = metadata.get("practice_area") or "Unknown_Practice"
+        else:
+            raw_firm_name = getattr(metadata, "firm_name", None) or "Unknown_Firm"
+            raw_practice_area = getattr(metadata, "practice_area", None) or "Unknown_Practice"
+    
     firm_name = sanitize_filename(raw_firm_name)
     practice_area = sanitize_filename(raw_practice_area)
     timestamp = int(time.time())

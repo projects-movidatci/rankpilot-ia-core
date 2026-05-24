@@ -1,7 +1,22 @@
 import operator
 from typing import Annotated, List, Dict, Any, Optional, Union
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, validator
 from src.core.schemas import BaseSubmission
+
+class Base64File(BaseModel):
+    filename: str
+    mime_type: str
+    base64_data: str
+
+class MattersAssistantPayload(BaseModel):
+    raw_input_text: Optional[str] = Field(None, description="Any raw text notes or forwarded emails from the lawyer.")
+    batch_documents: Optional[List[Base64File]] = Field(default_factory=list)
+
+    @validator('batch_documents')
+    def validate_file_limit(cls, v):
+        if v and len(v) > 10:
+            raise ValueError("Limit exceeded: You can only upload a maximum of 10 files. Please combine additional data into a single PDF or DOCX.")
+        return v
 
 # ==========================================
 # 1. MODELOS DE RANKPILOT (Positioning & Strategy)
@@ -37,7 +52,7 @@ class ExecutiveSummary(BaseModel):
     audit_letter_markdown: str = ""
 
 class MetaData(BaseModel):
-    file_base64: str = ""
+    file_base64: Optional[Base64File] = None
     target_band: Optional[str] = None
     directory: Optional[str] = None
     guide: str = Field(default="", description="Guide/Book/Research Edition")
@@ -53,9 +68,14 @@ class MetaData(BaseModel):
     @classmethod
     def sanitize_nulls_from_php(cls, data: Any) -> Any:
         if isinstance(data, dict):
+            # 1. REGLA DE ORO: Si file_base64 viene vacío (como string "" o null), lo forzamos a None
+            if "file_base64" in data and not data.get("file_base64"):
+                data["file_base64"] = None
+                
+            # 2. Para el resto de los campos (Firma, Directorio, etc.), si son null, los hacemos ""
             for k, v in data.items():
-                if v is None:
-                    data[k] = "" # Convertimos el null de PHP a un string vacío de Python
+                if v is None and k != "file_base64":
+                    data[k] = ""
         return data
 
 
@@ -114,10 +134,15 @@ class AgentState(BaseModel):
         if not value:
             return value
         cleaned = value.lower().replace(" ", "").replace("-", "").replace("_", "")
+        
+        if "matters" in cleaned and "assistant" in cleaned:
+            return "MattersAssistant"
         if "legal" in cleaned and "500" in cleaned:
             return "Legal500"
         if "chambers" in cleaned:
             return "Chambers"
+        if "leaders" in cleaned and "league" in cleaned:
+            return "LeadersLeague"
         return value.capitalize()
     
     @field_validator("submission", mode="before")

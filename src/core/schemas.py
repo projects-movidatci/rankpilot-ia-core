@@ -203,6 +203,26 @@ class Legal500Submission(BaseSubmission):
 #
 # =====================================================================
 
+# =====================================================================
+#
+#                         MATTERS ASSISTANT (ACT 0)
+#
+# =====================================================================
+class ExtractedMatter(BaseModel):
+    is_confidential: Optional[bool] = Field(default=False, description="True if notes mention confidentiality.")
+    client_name: Optional[str] = Field(default=None, description="Exact name of the client.")
+    matter_value: Optional[str] = Field(default=None, description="Financial scale or value.")
+    date_completion_or_status: Optional[str] = Field(default=None, description="Closing date or status.")
+    lead_partners: Optional[List[str]] = Field(default_factory=list, description="Partner(s) leading the mandate.")
+    other_team_members: Optional[List[str]] = Field(default_factory=list, description="Associates or counsels involved.")
+    other_firms_advising: Optional[List[str]] = Field(default_factory=list, description="Other law firms mentioned.")
+    cross_border_jurisdictions: Optional[List[str]] = Field(default_factory=list, description="Foreign jurisdictions.")
+    summary_of_matter_and_role: Optional[str] = Field(default=None, description="Core narrative (250-400 words) drafted using Magic Circle tone.")
+
+class SingleMatterExtraction(BaseSubmission):
+    # 🛡️ THE FIX: Auto-generate an empty ExtractedMatter if missing
+    matter: ExtractedMatter = Field(default_factory=ExtractedMatter)
+
 # -----------------------------------
 # Section A: Preliminary Information
 # -----------------------------------

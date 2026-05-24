@@ -1,6 +1,6 @@
 from src.chains.snapshot_chain import snapshot_chain, archetype_chain
 from src.core.state import AgentState
-from src.io.strategy_selector import get_strategic_context
+from src.logic.ranking_history_context import get_strategic_context
 from src.logic.ranking_history_context import get_unified_ranking_strategy
 
 def snapshot_generator_node(state: AgentState):

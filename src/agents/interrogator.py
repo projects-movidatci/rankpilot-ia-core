@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from src.core.state import AgentState
 from src.core.llm import get_llm
-from src.io.strategy_selector import get_strategic_context
 from src.logic.ranking_history_context import get_unified_ranking_strategy
 class StrategicQuestion(BaseModel):
     question: str = Field(

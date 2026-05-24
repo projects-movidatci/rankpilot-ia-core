@@ -4,8 +4,9 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from src.core.state import AgentState
 from src.core.llm import get_llm
-from src.core.schemas import ChambersSubmission, Legal500Submission, LeadersLeagueSubmission
-from src.io.strategy_selector import get_strategic_context
+from pydantic import BaseModel, Field
+from src.core.schemas import ChambersSubmission, Legal500Submission, LeadersLeagueSubmission, SingleMatterExtraction
+from src.logic.ranking_history_context import get_strategic_context
 # --- STRUCTURED OUTPUT MODELS ---
 class CleanedField(BaseModel):
     field_key: str = Field(description="The exact key/path of the field being cleaned.")
@@ -186,6 +187,8 @@ def sanitizer_node(state: AgentState) -> dict:
             updates["submission"] = Legal500Submission(**submission_dict)
         elif target_submission_type == "LeadersLeague":
             updates["submission"] = LeadersLeagueSubmission(**submission_dict)
+        elif target_submission_type == "MattersAssistant": # 👈 THE FIX
+            updates["submission"] = SingleMatterExtraction(**submission_dict)
         else:
             updates["submission"] = ChambersSubmission(**submission_dict)
             
