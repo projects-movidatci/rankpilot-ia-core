@@ -249,6 +249,57 @@ class PreliminaryInformation(BaseModel):
 # -----------------------------------
 # Section B: Department Information
 # -----------------------------------
+
+# =====================================================================
+#
+#                  BENCH STRENGTH & LAWYER EVALUATION
+#
+# =====================================================================
+
+class LawyerRubricEvaluation(BaseModel):
+    """Ángela's 11-Point Individual Ranking Readiness Rubric."""
+    matter_strength: CategoryScore = Field(description="Strength, value, and complexity of the associated matters.")
+    role_clarity: CategoryScore = Field(description="Clarity of their role (e.g., Lead partner vs. key supporting partner).")
+    practice_fit: CategoryScore = Field(description="Alignment between their work and the specific practice area.")
+    client_prestige: CategoryScore = Field(description="Relevance and sophistication of their clients.")
+    technical_sophistication: CategoryScore = Field(description="Legal complexity of their specific tasks within the matters.")
+    market_visibility: CategoryScore = Field(description="Previous rankings, awards, publications, or market recognition.")
+    referee_potential: CategoryScore = Field(description="Potential for clients to validate their work.")
+    narrative_consistency: CategoryScore = Field(description="Coherence between their B9 profile and the actual matter evidence.")
+    comparative_position: CategoryScore = Field(description="Realism of their candidacy compared to the market.")
+    risk_of_overclaiming: CategoryScore = Field(description="Assessment of whether the firm is pushing too hard without evidence. (Higher score = Lower risk).")
+    institutional_contribution: CategoryScore = Field(description="How this lawyer strengthens the overall bench depth and succession of the firm.")
+    
+    total_readiness_score: int = Field(description="The exact mathematical sum of all 11 category scores.")
+
+class ExecutiveLawyerDiagnosis(BaseModel):
+    """The output format required for the Strategic Dashboard."""
+    recommended_action: str = Field(description="Executive advice (e.g., 'Promote cautiously', 'Support as key partner', 'Associate to Watch candidate').")
+    rationale: str = Field(description="A punchy, 2-sentence executive summary explaining the recommended action based on the evidence.")
+    institutional_value: str = Field(description="Explanation of how this individual impacts the firm's overall practice perception and bench strength.")
+
+class B9LawyerProfile(BaseModel):
+    """The master object combining raw data, evaluation, and optimized output."""
+    name: str = Field(description="Full name of the lawyer.")
+    is_partner: bool = Field(description="True if they are a Partner, False if Counsel or Associate.")
+    current_ranking: Optional[str] = Field(None, description="Their current band status (e.g., 'Band 3', 'Not Ranked').")
+    target_ranking: Optional[str] = Field(None, description="The firm's proposed ranking goal.")
+    raw_biography: str = Field(description="The original text provided by the firm in Section B9.")
+    
+    # The Evidence Ledger
+    associated_matter_ids: List[str] = Field(
+        default_factory=list, 
+        description="A list of internal IDs for the optimized matters this lawyer participated in."
+    )
+    
+    # The Analytics & Output
+    rubric_evaluation: Optional[LawyerRubricEvaluation] = Field(None, description="The 11-point assessment.")
+    executive_diagnosis: Optional[ExecutiveLawyerDiagnosis] = Field(None, description="The strategic verdict.")
+    optimized_biography: Optional[str] = Field(
+        None, 
+        description="The final, ghostwritten B9 narrative anchored entirely in the facts of their associated matters."
+    )
+
 class PartnerStats(BaseModel):
     total_number: Optional[int] = Field(None, description="The total raw integer number of lawyers/partners in this category. Return 0 if none.")
     male_ratio_percentage: Optional[str] = Field(None, description="The percentage of males. Include the '%' sign if present in text.")

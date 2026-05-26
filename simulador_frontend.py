@@ -83,7 +83,8 @@ def main():
         "raw_text": raw_text,
         "submission": {},
         "strategic_context": {}, 
-        "gaps": []
+        "gaps": [],
+        "lawyer_profiles": [] # 👈 NUEVO: Inicializamos la lista de abogados
     }
 
     # 2. ENVIAR PETICIÓN INICIAL
@@ -138,6 +139,14 @@ def main():
             print("\n⚠️ Advertencia: No se recibió data procesada.")
             break
             
+        # 🛑 >>> INYECTA ESTOS PRINTS DE DEBUG AQUÍ <<< 🛑
+        print(f"\n🐞 [DEBUG FRONTEND 1] Claves devueltas por el servidor: {list(ia_data.keys())}")
+        if "lawyer_profiles" in ia_data:
+            print(f"🐞 [DEBUG FRONTEND 2] 'lawyer_profiles' detectado en la respuesta del API. Elementos: {len(ia_data['lawyer_profiles'])}")
+            print(f"🐞 [DEBUG FRONTEND 3] Contenido crudo: {ia_data['lawyer_profiles'][:1] if ia_data['lawyer_profiles'] else 'Lista vacía'}")
+        else:
+            print("❌ [DEBUG FRONTEND 4] 'lawyer_profiles' NO existe en el objeto devuelto por el servidor.")
+        
         # 🕵️‍♂️ BLOQUE DE DEBUG DE METADATA
         print_header("🔍 DEBUG: METADATA RECIBIDA DEL SERVIDOR")
         meta_recibida = to_dict(ia_data.get("metadata", {}))
@@ -190,22 +199,6 @@ def main():
             else:
                 print(guidelines)
 
-            print_header("⚖️ JUSTIFICACIÓN DEL TIER")
-            print(p_tier.get("explanation", "Sin justificación disponible."))
-
-            print_header("🕵️‍♂️ SEÑALES DE MERCADO DETECTADAS")
-            signals = p_core.get("signals", [])
-            if signals and isinstance(signals, list):
-                for s in signals: print(f" 🚩 {s}")
-            else:
-                print("No se detectaron señales de respaldo.")
-
-            print_header("📅 ROADMAP DE EVOLUCIÓN")
-            roadmap = ia_data.get("evolution_path", [])
-            for step in roadmap:
-                s = to_dict(step)
-                print(f" [{s.get('target_completion_date', 'TBD')}] {s.get('action_title', 'ACCIÓN').upper()}")
-
             print_header("📝 REPORTE FINAL DEL EXECUTIVE WRITER")
             exec_summary = to_dict(ia_data.get("executive_summary", {}))
             
@@ -216,24 +209,11 @@ def main():
                 print(f" 📊 SCORE GLOBAL   : {score}/100")
                 print(f" ⚠️ NIVEL DE RIESGO: {risk.upper() if isinstance(risk, str) else risk}")
                 print(f"\n 💡 VEREDICTO ESTRATÉGICO:\n {exec_summary.get('strategic_verdict', 'Sin veredicto.')}")
-                
-                diffs = exec_summary.get('top_differentiators', [])
-                if diffs and isinstance(diffs, list):
-                    print("\n 🎯 TOP DIFERENCIADORES A EXPLOTAR:")
-                    for d in diffs:
-                        print(f"   • {d}")
-                
-                letter = exec_summary.get('audit_letter_markdown', '')
-                if letter:
-                    print_header("✉️ CARTA DE AUDITORÍA AL DIRECTORIO")
-                    print(letter)
-                else:
-                    print("\n⚠️ La carta de auditoría no se generó o está vacía.")
             else:
                 print("⚠️ No se encontró el bloque 'executive_summary' en el estado final.")
 
             # =======================================================
-            # 🧠 THE FIX: NEW 100-POINT MATTERS INTELLIGENCE PRINTER
+            # 💼 THE MATTERS INTELLIGENCE PRINTER
             # =======================================================
             print_header("💼 ANÁLISIS ESTRATÉGICO DE CASOS (MATTERS)")
             submission_data = to_dict(ia_data.get("submission", {}))
@@ -241,89 +221,59 @@ def main():
             def print_matter_evaluation(m_dict, index):
                 client = m_dict.get("D1_name_of_client", m_dict.get("E1_name_of_client", "Unknown Client"))
                 val = m_dict.get("D3_matter_value", m_dict.get("E3_matter_value", "N/A"))
-                
-                # 🛡️ THE FRONTEND FIX: Read from the new nested "taxonomy" object!
-                taxonomy = m_dict.get("taxonomy", {})
-                if taxonomy:
-                    cat = taxonomy.get("primary_category", "Unclassified")
-                    role = taxonomy.get("firm_role_taxonomy", "Unclassified")
-                    complexities = taxonomy.get("complexity_indicators", [])
-                else:
-                    cat, role, complexities = "Unclassified", "Unclassified", []
-
                 print(f"\n  [{index}] Cliente: {client} | Valor: {val}")
-                print(f"      ⚖️ Taxonomía : {cat} | {role}")
-                print(f"      🧩 Complejidades: {', '.join(complexities) if complexities else 'Ninguna'}")
 
                 evaluation = m_dict.get("evaluation", {})
                 if evaluation:
                     total_score = evaluation.get("total_score", "N/A")
                     label = evaluation.get("classification_label", "Unclassified")
-                    feedback = evaluation.get("editorial_feedback", "No feedback.")
-                    
                     print(f"      🎯 Rúbrica   : {total_score}/100 | {label.upper()}")
-                    print(f"      📝 Feedback  : {feedback}")
-                    print("      📊 Desglose (Score & Justificación):")
-                    
-                    categories = [
-                        ("Table Fit", "table_fit"),
-                        ("Significance", "transaction_significance"),
-                        ("Complexity", "structural_complexity"),
-                        ("Sophistication", "legal_sophistication"),
-                        ("Firm Role", "firm_role_strength"),
-                        ("Prestige", "client_prestige"),
-                        ("Cross-border", "cross_border_complexity"),
-                        ("Innovation", "innovation_novelty"),
-                        ("Narrative", "narrative_strength")
-                    ]
-                    
-                    for display_name, key_name in categories:
-                        cat_data = evaluation.get(key_name, {})
-                        if isinstance(cat_data, dict) and "score" in cat_data:
-                            score = cat_data.get("score")
-                            justification = cat_data.get("justification", "")
-                            print(f"         - {display_name:<15}: {score:2d} pts | {justification}")
-                else:
-                    # Legacy fallback
-                    score = m_dict.get("narrative_score", "N/A")
-                    print(f"      🎯 Rúbrica   : {score}/10 (Legacy Format)")
 
-                desc = m_dict.get("D2_summary_of_matter_and_role", m_dict.get("E2_summary_of_matter_and_role", ""))
-                if desc:
-                    print(f"      ✍️ Extracto    : {desc[:150]}...")
-
-            # =======================================================
-            # 1 & 2. Casos Publicables y Confidenciales (VISTA LIMITADA)
-            # =======================================================
             pub_info = submission_data.get("D_publishable_information", {})
             pub_matters = pub_info.get("publishable_matters", []) if pub_info else []
-            
             conf_info = submission_data.get("E_confidential_information", {})
             conf_matters = conf_info.get("confidential_matters", []) if conf_info else []
 
-            total_matters = len(pub_matters) + len(conf_matters)
+            max_to_print = 3 
             printed_count = 0
-            max_to_print = 3  # 🛡️ THE FIX: Límite para no saturar la consola
 
             if pub_matters:
-                print(f"\n🟢 CASOS PUBLICABLES ({len(pub_matters)} detectados):")
                 for i, m in enumerate(pub_matters):
-                    if printed_count >= max_to_print:
-                        break
+                    if printed_count >= max_to_print: break
                     print_matter_evaluation(to_dict(m), i+1)
                     printed_count += 1
 
-            if conf_matters and printed_count < max_to_print:
-                print(f"\n🔴 CASOS CONFIDENCIALES ({len(conf_matters)} detectados):")
-                for i, m in enumerate(conf_matters):
-                    if printed_count >= max_to_print:
-                        break
-                    print_matter_evaluation(to_dict(m), i+1)
-                    printed_count += 1
+            print_header("⚖️ EVALUACIÓN DE BENCH STRENGTH (ABOGADOS)")
+            # 🛡️ THE FIX: Read from the safely synchronized agent_state, not the raw HTTP payload
+            raw_profiles = agent_state.get("lawyer_profiles", [])
+            lawyer_profiles = [to_dict(lp) for lp in raw_profiles] if raw_profiles else []
             
-            # Mensaje de advertencia de que hay más datos ocultos
-            if total_matters > max_to_print:
-                print(f"\n... ✂️ (Se han ocultado {total_matters - max_to_print} matters adicionales para ahorrar espacio en la consola) ...")
+            if lawyer_profiles:
+                for i, lawyer in enumerate(lawyer_profiles):
+                    name = lawyer.get("name", "Desconocido")
+                    role = "Socio" if lawyer.get("is_partner") else "Asociado/Counsel"
+                    target = lawyer.get("target_ranking", "No especificado")
+                    
+                    print(f"\n  [{i+1}] 🧑‍⚖️ {name} ({role}) | Target: {target}")
+                    
+                    rubric = lawyer.get("rubric_evaluation", {})
+                    if rubric:
+                        score = rubric.get("total_readiness_score", "N/A")
+                        print(f"      🎯 Puntuación de Evidencia : {score}/110")
+                        
+                    diagnosis = lawyer.get("executive_diagnosis", {})
+                    if diagnosis:
+                        action = diagnosis.get("recommended_action", "N/A")
+                        rationale = diagnosis.get("rationale", "N/A")
+                        print(f"      📈 Acción Recomendada      : {action}")
+                        print(f"      💡 Justificación           : {rationale}")
+                    
+                    opt_bio = lawyer.get("optimized_biography", "")
+                    if opt_bio:
+                        print(f"      ✍️ Bio Optimizada (Ghostwritten):")
+                        print(f"         \"{opt_bio[:300]}...\"")
+            else:
+                print("⚠️ No se extrajeron o evaluaron perfiles de abogados en este ciclo.")
 
             print_header("✨ PROCESO COMPLETADO")
             break
@@ -339,8 +289,6 @@ def main():
         
         gap_actual = gaps[0]["field"] if gaps else "general"
         
-        # 🛡️ THE CLEAN PAYLOAD 
-        # Formateamos exactamente como lo espera Laravel y FastAPI
         agent_state["new_answer"] = {
             "target_field": gap_actual,
             "question_text": pregunta,
@@ -351,7 +299,7 @@ def main():
             "thread_id": thread_id,
             "agent_state": agent_state
         }
-        print("metadata being sent back to server:", agent_state.get("metadata", {})) # Debug de metadata en la respuesta
+        
         print("\n📡 Analizando nueva información...")
         resp = requests.post(f"{BASE_URL}/process", json=payload_respuesta)
         

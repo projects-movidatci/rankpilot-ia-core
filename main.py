@@ -36,6 +36,7 @@ class AgentStatePayload(BaseModel):
     errors: List[str] = []
     # 🛡️ THE FIX: Allow our safe dictionary through the API
     strategic_context: Dict[str, Any] = {}
+    lawyer_profiles: List[Dict[str, Any]] = []
 
 # --- 2. EL WORKER EN SEGUNDO PLANO (La magia de LangGraph) ---
 def run_workflow_task(job_id: str, initial_state: dict, config: dict):
@@ -127,7 +128,8 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
             "positioning_core": safe_dump(final_state.get("positioning_core", {})),
             "positioning_tier": safe_dump(final_state.get("positioning_tier", {})),
             "blind_spots": safe_dump(final_state.get("blind_spots", [])),
-            "competitive_advantage": safe_dump(final_state.get("competitive_advantage", []))
+            "competitive_advantage": safe_dump(final_state.get("competitive_advantage", [])),
+            "lawyer_profiles": safe_dump(final_state.get("lawyer_profiles", []))
         }
 
         JOBS_DB[job_id]["progress"] = 100
@@ -204,7 +206,8 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
             "new_answer": state_input.new_answer,
             "errors": state_input.errors,
             # 🛡️ THE FIX: Pass the context into LangGraph
-            "strategic_context": state_input.strategic_context 
+            "strategic_context": state_input.strategic_context,
+            "lawyer_profiles": []
         }
         config = {"configurable": {"thread_id": thread_id}}
 

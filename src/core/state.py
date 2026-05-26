@@ -1,7 +1,7 @@
 import operator
 from typing import Annotated, List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field, field_validator, model_validator, validator
-from src.core.schemas import BaseSubmission
+from src.core.schemas import BaseSubmission, B9LawyerProfile
 
 class Base64File(BaseModel):
     filename: str
@@ -113,6 +113,11 @@ class AgentState(BaseModel):
     competitive_advantage: List[str] = Field(default_factory=list)
     evolution_path: List[Milestone] = Field(default_factory=list)
     executive_summary: Optional[ExecutiveSummary] = None
+    # Evaluación de abogados al estilo B9, con optimización de perfiles:
+    lawyer_profiles: List[B9LawyerProfile] = Field(
+        default_factory=list, 
+        description="The extracted, evaluated, and optimized B9 lawyer profiles."
+    )
 
     # --- Trazabilidad y Logs ---
     history: List[str] = Field(default_factory=list)
@@ -167,3 +172,33 @@ class AgentState(BaseModel):
             "question_text": str(v.get("question_text") or ""),
             "answer": str(v.get("answer") or "")
         }
+    @field_validator("new_answer", mode="before")
+    @classmethod
+    def sanitize_new_answer(cls, v: Any) -> Dict[str, str]:
+        """El Null Killer de Laravel"""
+        default = {"target_field": "", "question_text": "", "answer": ""}
+        if not isinstance(v, dict):
+            return default
+        return {
+            "target_field": str(v.get("target_field") or ""),
+            "question_text": str(v.get("question_text") or ""),
+            "answer": str(v.get("answer") or "")
+        }
+
+    # 🛡️ THE FIX: Force serialization of lawyer profiles to survive the HTTP boundary
+    @model_validator(mode="after")
+    def serialize_lawyer_profiles(self):
+        if self.lawyer_profiles:
+            serialized_profiles = []
+            for profile in self.lawyer_profiles:
+                if hasattr(profile, "model_dump"):
+                    # Use model_dump to convert the Pydantic object and all its nested sub-models into a dict
+                    serialized_profiles.append(profile.model_dump())
+                elif isinstance(profile, dict):
+                    serialized_profiles.append(profile)
+            
+            # Reassign the raw dicts back to the field (FastAPI will accept this natively)
+            # We use a type ignore here because Pydantic technically expects the B9LawyerProfile object,
+            # but we are purposefully overriding it at the last millisecond before HTTP transport.
+            self.lawyer_profiles = serialized_profiles # type: ignore
+        return self
