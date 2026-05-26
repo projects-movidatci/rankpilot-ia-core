@@ -294,7 +294,7 @@ def interrogator_node(state: AgentState) -> dict:
                     "Since the target field is for a PUBLISHABLE matter, gently remind the Partner that this "
                     "information will be part of the public record."
                     "At the very end of your response, you MUST add exactly this phrase in italics to guide the user: "
-                    "*(If you do not have another publishable matter to add, please click the 'Skip Publishable' button below).* "
+                    "*(If you do not have another publishable information about matters to add, please click the 'Skip Publishable' button below).* "
                     "Keep it elegant and unobtrusive."
                 )
 
@@ -380,6 +380,22 @@ def interrogator_node(state: AgentState) -> dict:
 
             elif is_strategic_enhancement:
                 # RAMA 4: EL "EDITORIAL PUSH" (Mejora de narrativa existente)
+
+                confidentiality_instruction = ""
+                if "confidential" in field.lower():
+                    confidentiality_instruction = (
+                        "\n\n[CRITICAL CONFIDENTIALITY MANDATE]\n"
+                        "Since the target field is for a CONFIDENTIAL matter, you MUST explicitly assure the Partner "
+                        "that the information they provide will be kept strictly confidential, used ONLY for the directory's "
+                        "internal panel evaluation, and will NEVER be published."
+                    )
+                elif "publishable" in field.lower():
+                    confidentiality_instruction = (
+                        "\n\n[PUBLISHABLE MANDATE]\n"
+                        "Since the target field is for a PUBLISHABLE matter, gently remind the Partner that this "
+                        "information will be part of the public record."
+                    )
+
                 user_prompt = (
                     "--- STRATEGIC ENHANCEMENT REQUIRED ---\n"
                     "We are reviewing a specific matter for the client: **'{client_name}'**.\n"
