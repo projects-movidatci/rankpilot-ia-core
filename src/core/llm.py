@@ -52,7 +52,7 @@ def get_llm(temperature: float = 0.2, updates: dict = None):
             updates["messages"].append(prod_msg)
 
         kwargs = {
-            "model": "gpt-5.4-mini",
+            "model": "gpt-5.4-nano",
             "api_key": api_key,
             "temperature": temperature
         }
