@@ -24,17 +24,49 @@ You will receive:
 You must rewrite the biography into a compelling, sophisticated narrative.
 
 [GHOSTWRITING RULES]
-1. NO PASSIVE VOICE: Do not say "He assisted with...". Say "He orchestrated...", "He spearheaded...", or "He structured...".
-2. ANCHOR IN FACTS: You MUST explicitly mention their specific technical contributions from the evidence provided. Connect their profile directly to the matters.
-3. ALIGN WITH DIAGNOSIS: If the diagnosis says they are an "Associate to Watch candidate", ensure the tone highlights their emerging leadership and bench strength contribution.
-4. NO HALLUCINATIONS: Do not invent deals, clients, or skills that are not present in the provided evidence.
+1. PRESERVE CORE IDENTITY & NO ENTITY LOSS: You MUST retain the critical background data from the RAW BIOGRAPHY. Crucially, you are forbidden from losing or omitting information about ANY entity mentioned in the original text (e.g., legacy clients, companies, financial institutions, board memberships, or academic institutions). You must seamlessly synthesize every specific name with the new evidence.
+2. NO PASSIVE VOICE: Do not say "He assisted with...". Say "He orchestrated...", "He spearheaded...", or "He structured...".
+3. ANCHOR IN FACTS: You MUST explicitly mention their specific technical contributions from the evidence provided. Connect their legacy profile directly to the recent matters.
+4. ALIGN WITH DIAGNOSIS: If the diagnosis says they are an "Associate to Watch candidate", ensure the tone highlights their emerging leadership and bench strength contribution.
+5. SCRUB FLUFF, NOT FACTS: Do not invent deals, clients, or skills (NO HALLUCINATIONS). Remove empty marketing adjectives from the raw biography, but keep the hard factual nouns.
+6. NO ENTITY LOSS: You must strictly retain and mention every key entity (e.g., active clients, external advising firms, acquired companies, financial institutions) provided in the original source material. You are forbidden from generalizing or dropping specific entity names during your synthesis.
 
 [MARKDOWN FORMATTING & PACING RULES]
 - NO WALLS OF TEXT: Do not write a single massive block. Break the narrative into exactly 2 or 3 punchy paragraphs.
 - DOUBLE SPACING: You MUST use double line breaks (\\n\\n) between paragraphs to ensure strict Markdown and Word compatibility.
 - BOLD HIGHLIGHTS: Use **bold text** for key client names, high-value amounts (e.g., **USD 4.5 million**), and core technical roles (e.g., **Lead Counsel**).
 - HIGH-IMPACT BULLETS: If the lawyer handled multiple distinct matters, use a clean bulleted list for the evidence section to maximize readability for Chambers researchers.
+- NO NESTED BULLETS: Keep your bulleted list strictly flat. Do not use sub-bullets or indentation.
 - NO HEADERS: Do not use markdown headers (like # or ##) to maintain table compatibility in the final document.
+"""
+
+class DepartmentOverviewOutput(BaseModel):
+    department_best_known_for: str = Field(
+        description="The final 2000-word executive summary of the department, utilizing Markdown bullet points and bolding for evidence."
+    )
+
+SYSTEM_PROMPT_DEPARTMENT_OVERVIEW = """
+[ROLE]
+You are an elite Legal Ghostwriter and Senior Editor for Chambers & Partners submissions.
+
+[YOUR MISSION]
+Write the "What is this department best known for?" section. 
+You will receive the newly optimized Lawyer Profiles and the Firm's top Matters. You must synthesize this into a master executive summary of the department.
+
+[GHOSTWRITING RULES & THE 'MAGIC CIRCLE' STANDARD]
+1. EFFORTLESS & PREMIUM TONE: Sound like a top-tier London or New York consultant. Market-facing, definitive, and exact. NO legalese, NO academic phrasing, and NO passive voice.
+2. STRUCTURAL ARCHITECTURE: 
+   - Start with a powerful 1-2 sentence introductory paragraph defining the practice's elite positioning.
+   - Then, create distinct bullet points grouped by the firm's strategic pillars (e.g., "Cross-Border Finance", "Fintech & Regulatory", "Debt Restructuring").
+3. EVIDENCE ANCHORING (CRITICAL): Under every single bullet point, you MUST cite 1 or 2 specific matters from the provided evidence to prove the claim. Do not make empty claims. 
+   - Example format: "Examples include advising **[Client Name]** on a **[Value]** facility..."
+4. NO ENTITY LOSS: You must strictly retain and mention every key entity (e.g., active clients, external advising firms, acquired companies, financial institutions) provided in the original source material. You are forbidden from generalizing or dropping specific entity names during your synthesis.
+
+[MARKDOWN FORMATTING RULES]
+1. STRICT BULLET POINTS: You must use Markdown bullet points (`*` or `-`). 
+2. NO NESTED BULLETS: Keep your bulleted list strictly flat. Do not use sub-bullets or indentation, as this will corrupt the final database formatting.
+3. BOLD HIGHLIGHTS: You MUST use **bold text** to highlight Client Names and Financial Values to make the document highly scannable for directory researchers.
+4. WORD LIMIT: Strictly under 2000 words. Make every word count.
 """
 
 def b9_optimization_node(state: AgentState) -> dict:
@@ -119,5 +151,53 @@ def b9_optimization_node(state: AgentState) -> dict:
                 if sub_lawyer.name.strip().lower() == profile.name.strip().lower():
                     sub_lawyer.comments_or_web_link = profile.optimized_biography
 
-    print("✅ B9 Narrative Optimization complete.")
+    # =====================================================================
+    # 🧠 NEW: DEPARTMENT OVERVIEW SYNTHESIS (B7/B10)
+    # =====================================================================
+    print("✍️ Initiating Department Overview Synthesis...")
+    
+    try:
+        # 1. Gather all optimized matter descriptions
+        matter_summaries = []
+        for matter in all_matters:
+            m_dict = matter.model_dump() if hasattr(matter, "model_dump") else vars(matter)
+            client = m_dict.get("D1_name_of_client", m_dict.get("E1_name_of_client", "Confidential Client"))
+            val = m_dict.get("D3_matter_value", m_dict.get("E3_matter_value", "N/A"))
+            desc = m_dict.get("D2_summary_of_matter_and_role", m_dict.get("E2_summary_of_matter_and_role", ""))
+            if desc and desc != "None":
+                matter_summaries.append(f"Client: {client} | Value: {val}\nSummary: {desc}")
+        
+        # 2. Gather all optimized lawyer profiles
+        lawyer_summaries = []
+        for profile in updated_profiles:
+            if profile.optimized_biography:
+                lawyer_summaries.append(f"Lawyer: {profile.name}\nProfile: {profile.optimized_biography}")
+        
+        # 3. Compile the payload
+        evidence_payload = (
+            "--- OPTIMIZED LAWYER PROFILES ---\n" + 
+            "\n\n".join(lawyer_summaries) + 
+            "\n\n--- TOP MATTER EVIDENCE ---\n" + 
+            "\n\n".join(matter_summaries[:10]) # Cap at top 10 matters to prevent token overflow
+        )
+
+        # 4. Invoke the LLM
+        overview_llm = get_llm(temperature=0.3).with_structured_output(DepartmentOverviewOutput)
+        overview_prompt = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM_PROMPT_DEPARTMENT_OVERVIEW),
+            ("human", "Synthesize the department overview based on this evidence:\n\n{evidence}")
+        ])
+        
+        overview_chain = overview_prompt | overview_llm
+        overview_result = overview_chain.invoke({"evidence": evidence_payload})
+        
+        # 5. Inject back into the submission object
+        if dept_info:
+            dept_info.department_best_known_for = overview_result.department_best_known_for
+            print("     ✅ Successfully synthesized the Department Overview.")
+
+    except Exception as e:
+        print(f"     ❌ Error synthesizing Department Overview: {e}")
+
+    # 🛡️ Final Return
     return {"lawyer_profiles": updated_profiles, "submission": submission}

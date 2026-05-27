@@ -278,7 +278,7 @@ def interrogator_node(state: AgentState) -> dict:
 
             # --- NUEVO: DETECCIÓN DE CONFIDENCIALIDAD ---
             confidentiality_instruction = ""
-            if "confidential" in field.lower():
+            if "confidential" in field.lower() and "summary_of_matter_and_role" in field.lower():
                 confidentiality_instruction = (
                     "\n\n[CRITICAL CONFIDENTIALITY MANDATE]\n"
                     "Since the target field is for a CONFIDENTIAL matter, you MUST explicitly assure the Partner "
@@ -288,7 +288,7 @@ def interrogator_node(state: AgentState) -> dict:
                     "*(If you do not have another confidential matter to add, please click the 'Skip Confidential' button below).* "
                     "Keep it elegant and unobtrusive."
                 )
-            elif "publishable" in field.lower():
+            elif "publishable" in field.lower() and "summary_of_matter_and_role" in field.lower():
                 confidentiality_instruction = (
                     "\n\n[PUBLISHABLE MANDATE]\n"
                     "Since the target field is for a PUBLISHABLE matter, gently remind the Partner that this "

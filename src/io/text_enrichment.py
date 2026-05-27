@@ -3,32 +3,47 @@ from docxtpl import RichText
 
 def parse_markdown_to_richtext(text_string: str) -> RichText:
     """
-    Convierte negritas (**texto**) y colores (<red>texto</red>) a RichText.
-    Fuerza saltos de línea exagerados para Word.
+    Converts bold (**text**) and colored (<red>text</red>) markdown to RichText.
+    Forces line breaks and parses markdown bullets.
     """
     if not text_string or not isinstance(text_string, str):
         return text_string 
 
     rt = RichText()
+    text_string = text_string.replace('\r\n', '\n')
+    
+    # 🛡️ THE FIX: Failsafe for inline bullets. 
+    # If the LLM generates "...markets. * Cross-Border" without a newline, 
+    # this forces a newline before the asterisk so the parser catches it.
+    text_string = re.sub(r'(?<=\S)\s+\*\s+', '\n* ', text_string)
+    
+    # Standardize paragraph spacing
     text_string = text_string.replace('\n\n', '\n\n\n')
     lineas = text_string.split('\n')
-    
+
+    # 🛡️ THE FIX: Process everything in a SINGLE loop to prevent variable scope loss.
     for index, linea in enumerate(lineas):
+        
+        # 1. Detect and transform bullets BEFORE processing bold/color
+        if re.match(r'^\s*[-*]\s+', linea):
+            # Replace the markdown bullet with a real bullet and a tab for clean spacing
+            linea = re.sub(r'^\s*[-*]\s+', '•\t', linea)
+
         if linea == "":
             if index < len(lineas) - 1:
                 rt.add('\n')
             continue
             
-        # 1. Primero cortamos por la etiqueta <red>
+        # 2. First split by <red> tags
         tokens_rojos = re.split(r'\[RED_START\](.*?)\[RED_END\]', linea)
         
         for i, token in enumerate(tokens_rojos):
             if not token:
                 continue
             
-            es_rojo = (i % 2 != 0) # Lo que está dentro de <red> cae en índices impares
+            es_rojo = (i % 2 != 0) # Inside <red> falls on odd indices
             
-            # 2. Luego cortamos por negritas dentro de cada token
+            # 3. Then split by bold tags
             partes_negritas = re.split(r'\*\*(.*?)\*\*', token)
             
             for j, parte in enumerate(partes_negritas):
@@ -37,9 +52,9 @@ def parse_markdown_to_richtext(text_string: str) -> RichText:
                 
                 es_negrita = (j % 2 != 0)
                 
-                # 3. Aplicamos los estilos combinados a Word
+                # 4. Apply combined Word styles
                 if es_rojo and es_negrita:
-                    rt.add(parte, bold=True, color='FF0000') # FF0000 es Rojo puro
+                    rt.add(parte, bold=True, color='FF0000') # Pure Red
                 elif es_rojo:
                     rt.add(parte, color='FF0000')
                 elif es_negrita:
@@ -47,7 +62,7 @@ def parse_markdown_to_richtext(text_string: str) -> RichText:
                 else:
                     rt.add(parte)
         
-        # Salto de línea al final del párrafo
+        # Add line break at the end of the paragraph
         if index < len(lineas) - 1:
             rt.add('\n')
             
@@ -55,22 +70,20 @@ def parse_markdown_to_richtext(text_string: str) -> RichText:
 
 def convert_all_markdown_to_richtext(data):
     """
-    Recursively scans a dictionary or list and converts any **bold** strings 
-    OR strings with linebreaks (\n) into docxtpl RichText objects in place.
+    Recursively scans a dictionary or list and converts any **bold** strings, 
+    bullet points (* or -), OR strings with linebreaks (\n) into docxtpl RichText objects.
     """
-
     if isinstance(data, dict):
         for k, v in data.items():
-            # AHORA ATRAPA TEXTOS CON ASTERISCOS O CON SALTOS DE LÍNEA
-            if isinstance(v, str) and ('**' in v or '\n' in v):
+            # 🛡️ THE FIX: Broadened the trigger condition to catch strings that only contain an asterisk
+            if isinstance(v, str) and ('**' in v or '\n' in v or '*' in v):
                 data[k] = parse_markdown_to_richtext(v)
             elif isinstance(v, (dict, list)):
                 convert_all_markdown_to_richtext(v)
                 
     elif isinstance(data, list):
         for i in range(len(data)):
-            # AHORA ATRAPA TEXTOS CON ASTERISCOS O CON SALTOS DE LÍNEA
-            if isinstance(data[i], str) and ('**' in data[i] or '\n' in data[i]):
+            if isinstance(data[i], str) and ('**' in data[i] or '\n' in data[i] or '*' in data[i]):
                 data[i] = parse_markdown_to_richtext(data[i])
             elif isinstance(data[i], (dict, list)):
                 convert_all_markdown_to_richtext(data[i])
