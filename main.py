@@ -34,9 +34,13 @@ class AgentStatePayload(BaseModel):
     messages: List[str] = []
     current_step: str = ""
     errors: List[str] = []
-    # 🛡️ THE FIX: Allow our safe dictionary through the API
     strategic_context: Dict[str, Any] = {}
+    
+    # 👇 THE FIX: Add the missing state objects to the API Contract 👇
     lawyer_profiles: List[Dict[str, Any]] = []
+    positioning_core: Dict[str, Any] = {}
+    positioning_tier: Dict[str, Any] = {}
+    executive_summary: Dict[str, Any] = {}
 
 # --- 2. EL WORKER EN SEGUNDO PLANO (La magia de LangGraph) ---
 def run_workflow_task(job_id: str, initial_state: dict, config: dict):
@@ -103,6 +107,7 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
         # Opcional: Extraer el Executive Summary si existe (Acto 3)
         exec_summary = final_state.get("executive_summary")
         exec_summary_dict = exec_summary.model_dump() if hasattr(exec_summary, 'model_dump') else exec_summary
+        
         metadata_obj = final_state.get("metadata")
         if hasattr(metadata_obj, 'model_dump'):
             metadata_final = metadata_obj.model_dump()
@@ -110,6 +115,33 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
             metadata_final = metadata_obj
         else:
             metadata_final = {}
+
+        # 👇 THE FIX: Safe extraction using 'or {}' to prevent NoneType attribute errors 👇
+        pub_info = sub_dict.get("D_publishable_information") or {}
+        pub_matters = pub_info.get("publishable_matters", []) if isinstance(pub_info, dict) else []
+        
+        conf_info = sub_dict.get("E_confidential_information") or {}
+        conf_matters = conf_info.get("confidential_matters", []) if isinstance(conf_info, dict) else []
+        
+        prelim_info = sub_dict.get("A_preliminary_information") or {}
+        referees = prelim_info.get("A4_contact_persons", []) if isinstance(prelim_info, dict) else []
+        
+        total_matters = len(pub_matters) + len(conf_matters)
+        
+        positioning = final_state.get("positioning_core", {})
+        confidence = positioning.get("confidence_score", 0) if isinstance(positioning, dict) else getattr(positioning, "confidence_score", 0)
+
+        ui_context_snapshot = {
+            "firm_name": metadata_final.get("firm_name", "Unknown Firm"),
+            "current_band": metadata_final.get("current_band", "Unknown"),
+            "target_band": metadata_final.get("target_band", "Unknown"),
+            "matters_count": total_matters,
+            "referees_count": len(referees) if referees else 0,
+            "lawyers_count": len(final_state.get("lawyer_profiles", [])),
+            "initial_confidence": confidence,
+            "audit_room_options": final_state.get("ui_audit_options", []) 
+        }
+
         final_agent_state = {
             "submission_id": final_state.get("submission_id"),
             "next_node": final_state.get("next_node"),
@@ -129,7 +161,8 @@ def run_workflow_task(job_id: str, initial_state: dict, config: dict):
             "positioning_tier": safe_dump(final_state.get("positioning_tier", {})),
             "blind_spots": safe_dump(final_state.get("blind_spots", [])),
             "competitive_advantage": safe_dump(final_state.get("competitive_advantage", [])),
-            "lawyer_profiles": safe_dump(final_state.get("lawyer_profiles", []))
+            "lawyer_profiles": safe_dump(final_state.get("lawyer_profiles", [])),
+            "ui_context_snapshot": ui_context_snapshot
         }
 
         JOBS_DB[job_id]["progress"] = 100
@@ -207,7 +240,7 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
             "errors": state_input.errors,
             # 🛡️ THE FIX: Pass the context into LangGraph
             "strategic_context": state_input.strategic_context,
-            "lawyer_profiles": []
+            "lawyer_profiles": state_input.lawyer_profiles,
         }
         config = {"configurable": {"thread_id": thread_id}}
 

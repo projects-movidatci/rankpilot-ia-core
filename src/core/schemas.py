@@ -422,7 +422,7 @@ class ConfidentialMatter(BaseModel):
     E2_summary_of_matter_and_role: Optional[str] = Field(None, description="Summarizes the confidential matter and the firm's role. This text is protected and not for publication.")
     E3_matter_value: Optional[str] = Field(None, description="The financial value of the matter. Often marked 'Confidential' or 'Non disclosable'. Extract the text as written.")
     E4_cross_border_jurisdictions: Optional[str] = Field(None, description="List of jurisdictions involved if cross-border. If it explicitly says 'No', return null.")
-    E5_lead_lawyer: Optional[str] = Field(None, description="Name(s) of the lead partner/lawyer on the matter.")
+    E5_lead_partner: Optional[str] = Field(None, description="Name(s) of the lead partner/lawyer on the matter.")
     E6_other_team_members: Optional[str] = Field(None, description="Names of other associates or team members involved.")
     E7_other_firms_advising: Optional[str] = Field(None, description="Names of other law firms involved and their roles. Return null if N/A.")
     E8_date_completion_or_status: Optional[str] = Field(None, description="The current status (e.g., 'Ongoing') or completion date.")

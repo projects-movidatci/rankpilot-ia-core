@@ -11,13 +11,12 @@ def print_header(texto):
     print(f"\n{'='*50}\n{texto}\n{'='*50}")
 
 # 🛡️ THE FRONTEND SANITIZER
-# Garantiza que todo lo que guardemos y enviemos al backend sea un diccionario puro.
 def to_dict(obj):
     if isinstance(obj, dict):
         return obj
-    if hasattr(obj, "model_dump"): # Si es Pydantic v2
+    if hasattr(obj, "model_dump"): 
         return obj.model_dump()
-    if hasattr(obj, "__dict__"): # Fallback para objetos genéricos
+    if hasattr(obj, "__dict__"): 
         return obj.__dict__
     return {}
 
@@ -76,6 +75,7 @@ def main():
             "practice_area": "Fintech",
             "submission_deadline": "December 25 2026",
             "jurisdiction": "Mexico",
+            "current_band": "Unranked",
         },
         "target_submission_type": "Chambers",
         "input_document_type": input_type,
@@ -84,7 +84,7 @@ def main():
         "submission": {},
         "strategic_context": {}, 
         "gaps": [],
-        "lawyer_profiles": [] # 👈 NUEVO: Inicializamos la lista de abogados
+        "lawyer_profiles": []
     }
 
     # 2. ENVIAR PETICIÓN INICIAL
@@ -101,6 +101,8 @@ def main():
         
     current_job_id = response.json()["job_id"]
     
+    has_entered_audit_room = False
+    active_category = None
     # 3. CICLO INFINITO DE LA APLICACIÓN
     while True:
         print("\n⏳ Procesando...")
@@ -117,7 +119,6 @@ def main():
             if status_data["status"] in ["started", "processing"]:
                 progreso = status_data.get('progress', 0)
                 barra = "█" * (progreso // 5) + "-" * (20 - (progreso // 5))
-                # Animación en una sola línea
                 print(f"\r[{barra}] {progreso}% - {status_data.get('message', '')}", end="", flush=True)
                 time.sleep(2)
                 
@@ -133,19 +134,10 @@ def main():
         if status_data["status"] == "failed":
             break
             
-        # --- Evaluación del Resultado ---
         ia_data = status_data.get("data", {})
         if not ia_data:
             print("\n⚠️ Advertencia: No se recibió data procesada.")
             break
-            
-        # 🛑 >>> INYECTA ESTOS PRINTS DE DEBUG AQUÍ <<< 🛑
-        print(f"\n🐞 [DEBUG FRONTEND 1] Claves devueltas por el servidor: {list(ia_data.keys())}")
-        if "lawyer_profiles" in ia_data:
-            print(f"🐞 [DEBUG FRONTEND 2] 'lawyer_profiles' detectado en la respuesta del API. Elementos: {len(ia_data['lawyer_profiles'])}")
-            print(f"🐞 [DEBUG FRONTEND 3] Contenido crudo: {ia_data['lawyer_profiles'][:1] if ia_data['lawyer_profiles'] else 'Lista vacía'}")
-        else:
-            print("❌ [DEBUG FRONTEND 4] 'lawyer_profiles' NO existe en el objeto devuelto por el servidor.")
         
         # 🕵️‍♂️ BLOQUE DE DEBUG DE METADATA
         print_header("🔍 DEBUG: METADATA RECIBIDA DEL SERVIDOR")
@@ -178,7 +170,7 @@ def main():
         gaps = agent_state.get("gaps", [])
         
         # CONDICIÓN DE SALIDA: Cuando ya no hay más preguntas (gaps)
-        if not gaps:
+        if not gaps or forced_generation:
 
             p_core = to_dict(ia_data.get("positioning_core", {}))
             p_tier = to_dict(ia_data.get("positioning_tier", {}))
@@ -190,7 +182,7 @@ def main():
             print(f" { 'TARGET':<20} : {s_context.get('realistic_target', 'N/A')}")
             
             conf = p_core.get('confidence_score', 0)
-            print(f" { 'CONFIANZA':<20} : {float(conf) * 100}%")
+            print(f" { 'CONFIANZA':<20} : {float(conf)}%")
             
             print_header("🎨 ESTRATEGIA DE NARRATIVA (MAQUILLAJE)")
             guidelines = p_core.get("narrative_guidelines", "No guidelines generated.")
@@ -212,9 +204,6 @@ def main():
             else:
                 print("⚠️ No se encontró el bloque 'executive_summary' en el estado final.")
 
-            # =======================================================
-            # 💼 THE MATTERS INTELLIGENCE PRINTER
-            # =======================================================
             print_header("💼 ANÁLISIS ESTRATÉGICO DE CASOS (MATTERS)")
             submission_data = to_dict(ia_data.get("submission", {}))
             
@@ -244,7 +233,6 @@ def main():
                     printed_count += 1
 
             print_header("⚖️ EVALUACIÓN DE BENCH STRENGTH (ABOGADOS)")
-            # 🛡️ THE FIX: Read from the safely synchronized agent_state, not the raw HTTP payload
             raw_profiles = agent_state.get("lawyer_profiles", [])
             lawyer_profiles = [to_dict(lp) for lp in raw_profiles] if raw_profiles else []
             
@@ -278,16 +266,113 @@ def main():
             print_header("✨ PROCESO COMPLETADO")
             break
             
-        # CHAT DE AUDITORÍA
+        # =======================================================
+        # 🎨 SIMULAR VIEW 1: CONTEXTO INICIAL (DASHBOARD)
+        # =======================================================
         print_header(f"🛑 AUDIT ROOM: {len(gaps)} brechas estratégicas detectadas")
         
+        ui_snapshot = ia_data.get("ui_context_snapshot", {})
+        audit_options = ui_snapshot.get("audit_room_options", []) if ui_snapshot else []
+        
+        # 👇 CORRECCIÓN: Mostrar solo si NO hemos entrado al audit room 👇
+        if ui_snapshot and audit_options and not has_entered_audit_room:
+            print_header("✨ VIEW 1: CONTEXTO INICIAL (DASHBOARD) ✨")
+            print(f" 🏢 Firma       : {ui_snapshot.get('firm_name', 'Unknown')}")
+            print(f" 📈 Trayectoria : {ui_snapshot.get('current_band', '?')} -> {ui_snapshot.get('target_band', '?')}")
+            print(f" 💼 Matters     : {ui_snapshot.get('matters_count', 0)}")
+            print(f" 🧑‍⚖️ Lawyers     : {ui_snapshot.get('lawyers_count', 0)}")
+            print(f" 🎯 Confianza   : {ui_snapshot.get('initial_confidence', 0.0)}%")
+            print("-" * 50)
+            print("¿Qué te gustaría reforzar? (Simulando clicks de Laravel)")
+            
+            for i, opt in enumerate(audit_options):
+                # 👇 THE FIX: Display the exact number of remaining questions (gaps) 👇
+                count = opt.get('count', 0)
+                print(f"  [{i+1}] {opt.get('title', 'Option')} ({count} questions) - {opt.get('subtitle', '')}")
+            
+            print("\n  [0] Ingresar al Audit Room normalmente (Pregunta por defecto)")
+            print("  [99] 🚀 Generar Documento (Omitir brechas restantes y compilar)")
+            
+            choice = input("\n👉 Elige una opción: ").strip()
+            
+            # Bloqueamos el menú para el resto de la sesión
+            has_entered_audit_room = True 
+
+            if choice == "99":
+                print("\n🚀 Iniciando fase de Ghostwriting y Ensamblaje...")
+                forced_generation = True  # 👈 THE FIX: Lock frontend into reporting mode
+                agent_state["new_answer"] = {
+                    "target_field": "COMMAND:GENERATE",
+                    "question_text": "",
+                    "answer": ""
+                }
+                payload_respuesta = {"thread_id": thread_id, "agent_state": agent_state}
+                resp = requests.post(f"{BASE_URL}/process", json=payload_respuesta)
+                if resp.status_code != 200:
+                    print("❌ Error al enviar la señal:", resp.text)
+                    break
+                current_job_id = resp.json().get("job_id")
+                has_entered_audit_room = False 
+                active_category = None
+                continue
+            
+            if choice.isdigit() and int(choice) > 0 and int(choice) <= len(audit_options):
+                selected_opt = audit_options[int(choice)-1]
+                print(f"\n📡 Simulando click en: {selected_opt['title']}...")
+
+                active_category = selected_opt["id"]
+                
+                # Send the strategic signal exactly like Laravel would
+                agent_state["new_answer"] = {
+                    "target_field": active_category,
+                    "question_text": "",
+                    "answer": ""
+                }
+                
+                payload_respuesta = {
+                    "thread_id": thread_id,
+                    "agent_state": agent_state
+                }
+                
+                resp = requests.post(f"{BASE_URL}/process", json=payload_respuesta)
+                if resp.status_code != 200:
+                    print("❌ Error al enviar la señal:", resp.text)
+                    break
+                    
+                current_job_id = resp.json().get("job_id")
+                continue # Restart loop to receive the specifically targeted question
+                
+        # =======================================================
+        # 🤖 VIEW 2: INTERROGACIÓN (Default o Específica)
+        # =======================================================
         preguntas = ia_data.get("questions", [])
         pregunta = preguntas[0] if preguntas else "¿Puedes proporcionar más detalles sobre esto?"
-        print(f"🤖 IA: {pregunta}")
+        print(f"\n🤖 IA: {pregunta}")
         
+        # 👇 FIX: Eliminamos el input duplicado. Todo en uno solo. 👇
+        print("\n  [💡 Escribe '/menu' para volver al Dashboard de opciones]")
         respuesta_usuario = input("\n👤 Tu respuesta: ")
         
-        gap_actual = gaps[0]["field"] if gaps else "general"
+        if respuesta_usuario.strip().lower() == "/menu":
+            has_entered_audit_room = False
+            print("\n🔄 Volviendo al menú principal...")
+            continue # Reinicia el ciclo local sin llamar a la API
+        # 👆 FIN DEL COMANDO TÁCTICO 👆
+        
+        if active_category:
+            cat_options = [opt for opt in audit_options if opt["id"] == active_category]
+            if cat_options and cat_options[0].get("count", 0) > 0:
+                # 👇 THE FIX: Find the actual target field belonging to this category! 👇
+                cat_name = active_category.split(":")[1]
+                gap_actual = next((g["field"] for g in gaps if g.get("ui_category") == cat_name), gaps[0]["field"])
+            else:
+                print_header(f"✅ ¡Excelente! Se completaron todas las preguntas para esta categoría.")
+                print("🔄 Volviendo al menú principal para que elijas otro enfoque...")
+                has_entered_audit_room = False
+                active_category = None
+                continue 
+        else:
+            gap_actual = gaps[0]["field"] if gaps else "general"
         
         agent_state["new_answer"] = {
             "target_field": gap_actual,

@@ -122,8 +122,28 @@ def chambers_ingestion_node(state: AgentState) -> dict:
         }
         
         final_submission = ChambersSubmission(**final_submission_dict)
-        
         updates["submission"] = final_submission
+        
+        # 👇 NEW: METADATA SYNC (Extract Firm Name) 👇
+        prelim_info = final_submission.A_preliminary_information
+        if prelim_info and prelim_info.A1_firm_name:
+            extracted_firm_name = prelim_info.A1_firm_name.strip()
+            
+            # Safely grab the current metadata from the state
+            current_metadata = getattr(state, "metadata", None)
+            if hasattr(current_metadata, "model_dump"):
+                meta_dict = current_metadata.model_dump(exclude_none=True)
+            elif isinstance(current_metadata, dict):
+                meta_dict = current_metadata.copy()
+            else:
+                meta_dict = {}
+                
+            # Inject the firm name and push to updates
+            meta_dict["firm_name"] = extracted_firm_name
+            updates["metadata"] = meta_dict
+            print(f"✅ Synced firm_name to metadata: '{extracted_firm_name}'")
+        # 👆 END OF METADATA SYNC 👆
+
         pub_count = len(final_submission.D_publishable_information.publishable_matters) if final_submission.D_publishable_information else 0
         conf_count = len(final_submission.E_confidential_information.confidential_matters) if final_submission.E_confidential_information else 0
         updates["messages"].append(f"✅ Extraction complete: {pub_count} Publishable, {conf_count} Confidential.")

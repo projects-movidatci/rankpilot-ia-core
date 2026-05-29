@@ -110,21 +110,21 @@ def process_answer_node(state: AgentState) -> dict:
         updates["messages"].append("⚙️ [COMMAND] 'SKIP_PUBLISHABLE_MATTERS' detected.")
         campos_casos = [gap.get("field") for gap in current_gaps if "publishable_matters" in gap.get("field", "")]
         updates["dismissed_gaps"] = dismissed + campos_casos
-        updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+        #updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
         return updates
 
     elif answer_text == "SKIP_CONFIDENTIAL_MATTERS":
         updates["messages"].append("⚙️ [COMMAND] 'SKIP_CONFIDENTIAL_MATTERS' detected.")
         campos_confidenciales = [gap.get("field") for gap in current_gaps if "confidential_matters" in gap.get("field", "")]
         updates["dismissed_gaps"] = dismissed + campos_confidenciales
-        updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+        #updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
         return updates
 
     elif answer_text == "SKIP_INTERVIEW":
         updates["messages"].append("⚙️ [COMMAND OVERRIDE] 'SKIP_INTERVIEW' detected. Shutting down interrogator permanently.")
         todos_los_campos = [gap.get("field") for gap in current_gaps]
         updates["dismissed_gaps"] = dismissed + todos_los_campos
-        updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+        #updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
         
         # 🧠 THE CLEAN FIX: Store the flag in the existing dictionary
         ctx = getattr(state, "strategic_context", {})
@@ -141,7 +141,7 @@ def process_answer_node(state: AgentState) -> dict:
         ctx["trigger_analysis"] = True 
         updates["strategic_context"] = ctx
         
-        updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+        #updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
         return updates
     
     if not answer_data or not answer_data.get("answer"):
@@ -230,7 +230,7 @@ def process_answer_node(state: AgentState) -> dict:
                 print(f"Answer Evaluator: Metadata '{meta_key}' updated to '{result.extracted_value}'.")
                 updates["messages"].append(f"SUCCESS: Metadata '{meta_key}' updated to '{result.extracted_value}'.")
                 
-                updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+                #updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
                 return updates
             
             print(f"submission before update: {str(submission)[:500]}...")
@@ -300,7 +300,7 @@ def process_answer_node(state: AgentState) -> dict:
 
                 except Exception as e:
                     updates["messages"].append(f"CRITICAL ERROR: {str(e)}")
-                    updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+                #    updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
                 
             else:
                  updates["messages"].append("Answer Evaluator Error: No submission object exists.")
@@ -309,5 +309,5 @@ def process_answer_node(state: AgentState) -> dict:
         import traceback
         updates["messages"].append(f"FATAL ERROR: {str(e)} | Traceback: {traceback.format_exc()[:500]}")
 
-    updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
+    #updates["new_answer"] = {"target_field": "", "question_text": "", "answer": ""}
     return updates

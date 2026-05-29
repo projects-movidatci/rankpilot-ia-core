@@ -2,6 +2,7 @@ import operator
 from typing import Annotated, List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field, field_validator, model_validator, validator
 from src.core.schemas import BaseSubmission, B9LawyerProfile
+import re
 
 class Base64File(BaseModel):
     filename: str
@@ -18,9 +19,6 @@ class MattersAssistantPayload(BaseModel):
             raise ValueError("Limit exceeded: You can only upload a maximum of 10 files. Please combine additional data into a single PDF or DOCX.")
         return v
 
-# ==========================================
-# 1. MODELOS DE RANKPILOT (Positioning & Strategy)
-# ==========================================
 class PositioningCore(BaseModel):
     practice_model: str = ""
     practice_definition: str = ""
@@ -62,77 +60,89 @@ class MetaData(BaseModel):
     location: str = ""
     submission_deadline: str = ""
     firm_name: str = ""
+    current_band: str = Field(default="Unranked", description="Default assumption if missing.")
+    ranking_history: str = Field(default="Stagnation", description="Default assumption to force an ascension narrative.")
 
-    # 👇 ESTE ES EL ESCUDO CONTRA EL NULL DE LARAVEL 👇
+    # 👇 THE PERFECTED METADATA VALIDATOR 👇
     @model_validator(mode="before")
     @classmethod
     def sanitize_nulls_from_php(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            # 1. REGLA DE ORO: Si file_base64 viene vacío (como string "" o null), lo forzamos a None
+            # 1. GOLDEN RULE: If file_base64 is empty, force it to None
             if "file_base64" in data and not data.get("file_base64"):
                 data["file_base64"] = None
                 
-            # 2. Para el resto de los campos (Firma, Directorio, etc.), si son null, los hacemos ""
+            # 2. STRATEGIC DEFAULTS
+            current_band_val = data.get("current_band")
+            if not current_band_val:
+                current_band_val = "Unranked"
+                data["current_band"] = current_band_val
+                
+            if not data.get("ranking_history"):
+                data["ranking_history"] = "Stagnation"
+                
+            # 3. DYNAMIC TARGET BAND CALCULATION
+            cb_lower = str(current_band_val).lower()
+            if "unranked" in cb_lower or "no rank" in cb_lower:
+                data["target_band"] = "Band 5" # Entry level target
+            else:
+                match = re.search(r'\d+', current_band_val)
+                if match:
+                    current_num = int(match.group())
+                    if current_num > 1:
+                        data["target_band"] = f"Band {current_num - 1}"
+                    else:
+                        data["target_band"] = "Band 1" 
+                else:
+                    data["target_band"] = current_band_val 
+
+            # 4. Clean remaining nulls
             for k, v in data.items():
-                if v is None and k != "file_base64":
+                if v is None and k not in ["file_base64", "current_band", "target_band", "ranking_history"]:
                     data[k] = ""
+                    
         return data
 
-
-# ==========================================
-# 2. EL SÚPER ESTADO UNIFICADO
-# ==========================================
 class AgentState(BaseModel):
-    """
-    El 'Súper Estado' que fusiona el constructor de Submissions y el RankPilot Engine.
-    """
-    # --- Identificación y Metadata ---
     submission_id: str = ""
     target_submission_type: Optional[str] = None
     input_document_type: Optional[str] = None
     metadata: Optional[MetaData] = None
     
-    # --- Archivos y Texto Extraído ---
     base64_documents: List[Dict[str, str]] = Field(default_factory=list)
     decoded_file_paths: List[str] = Field(default_factory=list)
-    raw_text: str = "" # Usado por RankPilot para el análisis
-    extracted_text: Optional[str] = None # Legacy de Submissions
+    raw_text: str = "" 
+    extracted_text: Optional[str] = None 
     output_base64: Optional[str] = None
     
-    # --- El Corazón de Submissions ---
     submission: Optional[BaseSubmission] = None
-    gaps: List[Dict[str, Any]] = Field(default_factory=list) # Formato dict para dot-notation
+    gaps: List[Dict[str, Any]] = Field(default_factory=list) 
     dismissed_gaps: List[str] = Field(default_factory=list)
-    new_answer: Dict[str, Any] = Field(default_factory=dict) # Protegido por el Null Killer
+    new_answer: Dict[str, Any] = Field(default_factory=dict) 
     questions: List[str] = Field(default_factory=list)
     
-    # --- El Corazón de RankPilot ---
     positioning_core: Optional[PositioningCore] = None
     positioning_tier: Optional[PositioningTier] = None
     blind_spots: List[BlindSpot] = Field(default_factory=list)
     competitive_advantage: List[str] = Field(default_factory=list)
     evolution_path: List[Milestone] = Field(default_factory=list)
     executive_summary: Optional[ExecutiveSummary] = None
-    # Evaluación de abogados al estilo B9, con optimización de perfiles:
+    
     lawyer_profiles: List[B9LawyerProfile] = Field(
         default_factory=list, 
         description="The extracted, evaluated, and optimized B9 lawyer profiles."
     )
 
-    # --- Trazabilidad y Logs ---
     history: List[str] = Field(default_factory=list)
     messages: Annotated[list, operator.add] = Field(default_factory=list)
-    # Acepta str (Submissions) o int (RankPilot) para evitar quiebres:
     current_step: Union[str, int] = "" 
-    next_node: str = "" # Usado por RankPilot para ruteo condicional
+    next_node: str = "" 
     errors: List[str] = Field(default_factory=list)
     config: Dict[str, Any] = Field(default_factory=dict)
 
     strategic_context: Dict[str, Any] = Field(default_factory=dict)
+    ui_audit_options: List[Dict[str, Any]] = Field(default_factory=list)
 
-    # ==========================================
-    # VALIDADORES (Los Escudos de Producción)
-    # ==========================================
     @field_validator("target_submission_type", mode="before")
     @classmethod
     def normalize_submission_type(cls, value: Optional[str]) -> Optional[str]:
@@ -163,19 +173,6 @@ class AgentState(BaseModel):
     @field_validator("new_answer", mode="before")
     @classmethod
     def sanitize_new_answer(cls, v: Any) -> Dict[str, str]:
-        """El Null Killer de Laravel"""
-        default = {"target_field": "", "question_text": "", "answer": ""}
-        if not isinstance(v, dict):
-            return default
-        return {
-            "target_field": str(v.get("target_field") or ""),
-            "question_text": str(v.get("question_text") or ""),
-            "answer": str(v.get("answer") or "")
-        }
-    @field_validator("new_answer", mode="before")
-    @classmethod
-    def sanitize_new_answer(cls, v: Any) -> Dict[str, str]:
-        """El Null Killer de Laravel"""
         default = {"target_field": "", "question_text": "", "answer": ""}
         if not isinstance(v, dict):
             return default
@@ -185,20 +182,14 @@ class AgentState(BaseModel):
             "answer": str(v.get("answer") or "")
         }
 
-    # 🛡️ THE FIX: Force serialization of lawyer profiles to survive the HTTP boundary
     @model_validator(mode="after")
     def serialize_lawyer_profiles(self):
         if self.lawyer_profiles:
             serialized_profiles = []
             for profile in self.lawyer_profiles:
                 if hasattr(profile, "model_dump"):
-                    # Use model_dump to convert the Pydantic object and all its nested sub-models into a dict
                     serialized_profiles.append(profile.model_dump())
                 elif isinstance(profile, dict):
                     serialized_profiles.append(profile)
-            
-            # Reassign the raw dicts back to the field (FastAPI will accept this natively)
-            # We use a type ignore here because Pydantic technically expects the B9LawyerProfile object,
-            # but we are purposefully overriding it at the last millisecond before HTTP transport.
             self.lawyer_profiles = serialized_profiles # type: ignore
         return self

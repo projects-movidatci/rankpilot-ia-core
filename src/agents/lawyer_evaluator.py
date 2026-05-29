@@ -38,15 +38,20 @@ def lawyer_evaluation_node(state: AgentState) -> dict:
         return {"lawyer_profiles": []}
         
     submission = getattr(state, "submission", None)
-    if not submission:
+    
+    # Extraer y combinar ambos arrays
+    pub_info = getattr(submission, "D_publishable_information", None)
+    pub_matters = getattr(pub_info, "publishable_matters", []) if pub_info else []
+    
+    conf_info = getattr(submission, "E_confidential_information", None)
+    conf_matters = getattr(conf_info, "confidential_matters", []) if conf_info else []
+
+    all_matters = pub_matters + conf_matters
+
+    if not all_matters:
+        print("⚠️ No matters found in submission to evaluate lawyers against.")
         return {"lawyer_profiles": lawyer_profiles}
-
-    all_matters = []
-    if hasattr(submission, "D_publishable_information") and submission.D_publishable_information:
-        all_matters.extend(getattr(submission.D_publishable_information, "publishable_matters", []))
-    if hasattr(submission, "E_confidential_information") and submission.E_confidential_information:
-        all_matters.extend(getattr(submission.E_confidential_information, "confidential_matters", []))
-
+    
     llm = get_llm(temperature=0).with_structured_output(LawyerEvaluationOutput)
     
     prompt = ChatPromptTemplate.from_messages([
@@ -64,7 +69,9 @@ def lawyer_evaluation_node(state: AgentState) -> dict:
         print(f"   ▶ Evaluating: {profile.name}...")
         lawyer_matters = []
         associated_ids = []
+        
         name_normalized = normalize_text(profile.name)
+        name_parts = name_normalized.split() # 🛡️ NEW: Split name for robust matching
         
         for index, matter in enumerate(all_matters):
             matter_id = getattr(matter, "matter_id", None)
@@ -80,8 +87,27 @@ def lawyer_evaluation_node(state: AgentState) -> dict:
             others_e = str(m_dict.get("E6_other_team_members", ""))
             
             team_string = f"{lead_d} {lead_e} {others_d} {others_e}"
+            team_norm = normalize_text(team_string)
             
-            if name_normalized in normalize_text(team_string):
+            # =========================================================
+            # 🛡️ THE NEW ROBUST NAME MATCHING LOGIC
+            # =========================================================
+            is_match = False
+            
+            # Condition 1: Exact substring match (e.g., "jorge labastida" in "jorge labastida, partner")
+            if name_normalized in team_norm:
+                is_match = True
+                
+            # Condition 2: First Name + Last Name match (e.g., "emilio" AND "carrillo" in the string)
+            elif len(name_parts) >= 2:
+                first_name = name_parts[0]
+                primary_surname = name_parts[1]
+                last_surname = name_parts[-1]
+                
+                if first_name in team_norm and (primary_surname in team_norm or last_surname in team_norm):
+                    is_match = True
+
+            if is_match:
                 val = str(m_dict.get("D3_matter_value", m_dict.get("E3_matter_value", "N/A")))
                 desc = str(m_dict.get("D2_summary_of_matter_and_role", m_dict.get("E2_summary_of_matter_and_role", "N/A")))
                 lawyer_matters.append(f"Matter Value: {val}\nDescription & Role: {desc}")

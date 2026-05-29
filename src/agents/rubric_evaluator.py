@@ -2,7 +2,7 @@ import os
 from typing import Union
 from langchain_core.prompts import ChatPromptTemplate
 from src.core.llm import get_llm
-from src.core.state import AgentState
+from src.core.state import AgentState, PositioningCore
 from src.core.schemas import PublishableMatter, ConfidentialMatter
 from src.io.rag_call import load_rubric_rag
 from src.core.schemas import RubricEvaluation
@@ -150,8 +150,42 @@ def rubric_evaluator_node(state: AgentState) -> dict:
         confidential.confidential_matters = evaluated_conf
 
     updates["submission"] = submission
-    updates["messages"].append(f"✅ Rubric Node Success: Evaluated {len(evaluated_results)} matters successfully.")
-    print(f"✅ Rubric evaluation completed for {len(evaluated_results)} matters.")
+
+    # 👇 NUEVO CÓDIGO: CÁLCULO DE LA CONFIANZA INICIAL (PROMEDIO) 👇
+    total_score_sum = 0
+    valid_evaluations_count = 0
+
+    for m in evaluated_results:
+        if hasattr(m, "evaluation") and m.evaluation:
+            total_score_sum += m.evaluation.total_score
+            valid_evaluations_count += 1
+
+    initial_confidence = 0.0
+    if valid_evaluations_count > 0:
+        # Calculamos el promedio sobre 100 y lo dejamos como float (ej. 72.0)
+        # para que tu frontend o main.py pueda renderizarlo como "72%"
+        initial_confidence = round(total_score_sum / valid_evaluations_count, 1)
+
+    # Recuperar el positioning_core actual del estado (o crear uno nuevo)
+    if isinstance(state, dict):
+        current_core = state.get("positioning_core", None)
+    else:
+        current_core = getattr(state, "positioning_core", None)
+
+    if not current_core:
+        current_core = PositioningCore(confidence_score=initial_confidence)
+    else:
+        # Si ya existe (como Pydantic model o dict), lo actualizamos
+        if isinstance(current_core, dict):
+            current_core["confidence_score"] = initial_confidence
+        else:
+            current_core.confidence_score = initial_confidence
+
+    updates["positioning_core"] = current_core
+    # 👆 FIN DEL NUEVO CÓDIGO 👆
+
+    updates["messages"].append(f"✅ Rubric Node Success: Evaluated {len(evaluated_results)} matters successfully. Initial Confidence: {initial_confidence}%")
+    print(f"✅ Rubric evaluation completed for {len(evaluated_results)} matters. Promedio: {initial_confidence}%")
 
     return updates
 

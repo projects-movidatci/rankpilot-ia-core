@@ -86,23 +86,37 @@ def get_unified_ranking_strategy(current_band: str, history: str, directory_type
 # =========================================================
 # 3. CONTEXT ENGINE (ESTRATEGIA Y ARQUETIPOS - V1 OPTIMIZADO)
 # =========================================================
-def get_strategic_context(submission_dict: dict) -> dict:
-    # 1. BÚSQUEDA INTELIGENTE DE ESTATUS (Agnóstico al directorio)
-    status = "Unranked"
-    
-    if "identity" in submission_dict:
-        status = submission_dict["identity"].get("current_band_status", "Unranked")
-    elif "A_preliminary_information" in submission_dict:
-        status = submission_dict["A_preliminary_information"].get("current_band_status", "Unranked")
-    elif "department_information" in submission_dict:
-        status = submission_dict["department_information"].get("current_ranking_status", "Unranked")
-    elif "current_band_status" in submission_dict:
-        status = submission_dict.get("current_band_status", "Unranked")
+def get_strategic_context(submission_dict: dict, metadata: dict = None) -> dict:
+    """
+    Evaluates the firm's status and trajectory using Laravel's metadata payload.
+    Defaults to a 'Stagnation' history to automatically build an ascension narrative
+    without interrogating the user.
+    """
+    if metadata is None:
+        metadata = {}
 
-    status_lower = str(status).lower()
+    # 1. Extract data directly from Laravel's payload
+    current_band = metadata.get("current_band", "Band 5")
+    target_band = metadata.get("target_band", "Band 4")
+    directory_type = metadata.get("directory", "Chambers")
     
-    # 2. TARGET REALISTA Y POSICIÓN DE PARTIDA 
-    if "unranked" in status_lower or "no rank" in status_lower or "preliminary" in status_lower or "spotlight" in status_lower:
+    # 2. Force the historical assumption to bypass Audit Room questions
+    history = "Stagnation" 
+
+    # 3. Process the logic through your unified strategy engine
+    strategy = get_unified_ranking_strategy(current_band, history, directory_type)
+    
+    # 4. Refine the dynamic target label based on Laravel's target_band
+    target_label = f"Ascension Push ({current_band} -> {target_band})"
+    if current_band == target_band:
+        target_label = f"Defensive Consolidation (Protecting {current_band})"
+    elif "unranked" in current_band.lower():
+        target_label = f"Entry-Level Breakthrough (Targeting {target_band})"
+
+    # 5. Execute explicit strategic tone and target logic
+    status_lower = str(current_band).lower()
+    
+    if any(x in status_lower for x in ["unranked", "no rank", "preliminary", "spotlight"]):
         target = "Entry-level (Break into Band 4 or Band 3)"
         tone = "Evaluate strictly as an Entry Candidate aiming to break into Band 4 or Band 3. Do not look for market dominance; look for baseline credibility, institutional clients, and solid mid-market execution."
     elif "5" in status_lower or "4" in status_lower:
@@ -120,6 +134,9 @@ def get_strategic_context(submission_dict: dict) -> dict:
     else:
         target = "General Advancement (Improve current standing)"
         tone = "Evaluate objectively based on the provided evidence, identifying the next logical tier of progression."
+
+    # 6. Combine the dynamic label with the explicit target definition
+    realistic_target_final = f"{target_label} - {target}"
 
     full_archetype_library = """
     TRANSACTIONAL (Banking, Corporate, VC, Infra):
@@ -150,8 +167,9 @@ def get_strategic_context(submission_dict: dict) -> dict:
     """
 
     return {
-        "realistic_target": target,
+        "realistic_target": realistic_target_final,
         "evaluation_tone": tone,
+        "strategic_objective": strategy.get("strategic_objective", "General Advancement"),
         "possible_archetypes": full_archetype_library,
-        "current_band": status 
+        "current_band": current_band 
     }

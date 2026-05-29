@@ -31,7 +31,7 @@ def get_llm(temperature: float = 0.2, updates: dict = None):
 # Modelo: google/gemini-2.0-flash-001 (o el que esté disponible en OpenRouter)
 
         return ChatOpenAI(
-            model="google/gemini-3.1-flash-lite",
+            model="openai/gpt-5.4-nano",
             api_key=api_key,
             base_url="https://openrouter.ai/api/v1",
             temperature=temperature,
