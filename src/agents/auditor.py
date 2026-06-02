@@ -1,6 +1,7 @@
 from src.core.state import AgentState
 from src.io.strategy_selector import get_strategy, get_config_path
 import yaml
+import re
 
 def audit_node(state: AgentState) -> dict:
     updates = {"current_step": "audit", "messages": []}
@@ -42,7 +43,43 @@ def audit_node(state: AgentState) -> dict:
     raw_gaps = strategy.audit(submission_dict)
     
     dismissed_gaps = getattr(state, "dismissed_gaps", [])
-    filtered_gaps = [gap for gap in raw_gaps if gap.get("field") not in dismissed_gaps]
+    
+    # =======================================================
+    # 🧠 THE CAPACITY FILTER (Límite Combinado de 20 Asuntos)
+    # =======================================================
+    pub_info = getattr(submission_data, "D_publishable_information", None) if submission_data else None
+    conf_info = getattr(submission_data, "E_confidential_information", None) if submission_data else None
+    
+    pub_count = len(getattr(pub_info, "publishable_matters", [])) if pub_info else 0
+    conf_count = len(getattr(conf_info, "confidential_matters", [])) if conf_info else 0
+    total_matters = pub_count + conf_count
+    
+    filtered_gaps = []
+    for gap in raw_gaps:
+        field = gap.get("field", "")
+        
+        # 1. Omitir si fue descartado manualmente por el usuario o el evaluador
+        if field in dismissed_gaps:
+            continue
+            
+        # 2. Bloquear peticiones de NUEVOS asuntos si se alcanzó la capacidad global
+        if total_matters >= 20:
+            # Buscar el índice en asuntos públicos
+            pub_match = re.search(r"publishable_matters\.(\d+)", field)
+            if pub_match and int(pub_match.group(1)) >= pub_count:
+                continue  # Descartar: está pidiendo crear un asunto público nuevo
+                
+            # Buscar el índice en asuntos confidenciales
+            conf_match = re.search(r"confidential_matters\.(\d+)", field)
+            if conf_match and int(conf_match.group(1)) >= conf_count:
+                continue  # Descartar: está pidiendo crear un asunto confidencial nuevo
+                
+        # Si sobrevive a los filtros, se añade a la lista
+        filtered_gaps.append(gap)
+        
+    if total_matters >= 20:
+        updates["messages"].append(f"Audit node: Capacidad global alcanzada ({total_matters}/20 matters). Suprimiendo gaps estructurales para creación de nuevos asuntos.")
+    # =======================================================
 
     strategic_gaps = []
     max_scores = {

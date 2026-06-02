@@ -106,7 +106,6 @@ def chambers_ingestion_node(state: AgentState) -> dict:
                 return obj.model_dump(exclude_none=True)
             return obj if obj else {}
 
-        # 🛡️ THE NEW FIX: Directly map the D0 and E0 lists extracted by the LLM
         final_submission_dict = {
             "A_preliminary_information": to_dict_safe(getattr(core_data, "A_preliminary_information", None)),
             "B_department_information": to_dict_safe(getattr(core_data, "B_department_information", None)),
@@ -121,6 +120,33 @@ def chambers_ingestion_node(state: AgentState) -> dict:
             }
         }
         
+        # 👇 THE FIX: Auto-Inject Dashboard Metadata into the Submission Object 👇
+        # 1. Safely grab the current metadata from the state
+        current_metadata = getattr(state, "metadata", None)
+        if hasattr(current_metadata, "model_dump"):
+            meta_dict = current_metadata.model_dump(exclude_none=True)
+        elif isinstance(current_metadata, dict):
+            meta_dict = current_metadata.copy()
+        else:
+            meta_dict = {}
+
+        # 2. Extract the values provided by the dashboard
+        dash_band = meta_dict.get("current_band", "")
+        dash_history = meta_dict.get("ranking_history", "")
+
+        # 3. Inject them directly into the preliminary information section
+        if "A_preliminary_information" not in final_submission_dict or not final_submission_dict["A_preliminary_information"]:
+            final_submission_dict["A_preliminary_information"] = {}
+
+        if dash_band and dash_band != "Unknown":
+            final_submission_dict["A_preliminary_information"]["current_band_status"] = dash_band
+            print(f"💉 Injected current_band '{dash_band}' into submission schema.")
+            
+        if dash_history and dash_history != "Unknown":
+            final_submission_dict["A_preliminary_information"]["ranking_history_trajectory"] = dash_history
+            print(f"💉 Injected ranking_history '{dash_history}' into submission schema.")
+        # 👆 END OF FIX 👆
+
         final_submission = ChambersSubmission(**final_submission_dict)
         updates["submission"] = final_submission
         
