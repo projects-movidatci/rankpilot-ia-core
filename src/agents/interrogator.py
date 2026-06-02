@@ -7,7 +7,7 @@ from src.logic.ranking_history_context import get_unified_ranking_strategy
 
 class StrategicQuestion(BaseModel):
     question: str = Field(
-        description="The complete verbal response to the Partner. It MUST include your conversational clarification or validation FIRST, followed immediately by the targeted question."
+        description="The complete verbal response to the Partner. This is usually a question, but can also be a final closure statement if instructed to end the conversation."
     )
 
 def interrogator_node(state: AgentState) -> dict:
@@ -23,23 +23,25 @@ def interrogator_node(state: AgentState) -> dict:
             input_type = getattr(state, "input_document_type", "unknown")
             
             previous_answer_obj = getattr(state, "new_answer", {})
-            target_field_from_frontend = previous_answer_obj.get("target_field", "")
+            ctx = getattr(state, "strategic_context", {})
+            active_cat = ctx.get("active_category")
             
-            first_gap = gaps[0]
+            category_is_depleted = False
+            first_gap = gaps[0] if gaps else {}
             
-            # 👇 ADVANCED CATEGORY ROUTER WITH DEBUGGING 👇
-            if target_field_from_frontend.startswith("category:"):
-                selected_cat = target_field_from_frontend.split(":")[1]
-                found = False
-                for g in gaps:
-                    if g.get("ui_category") == selected_cat:
-                        first_gap = g
-                        found = True
-                        print(f"🎯 [ROUTER SUCCESS] Intercepted category '{selected_cat}'. Targeting gap: {g.get('field')}")
-                        break
+            # If the frontend is locked onto a category, FILTER the gaps!
+            if active_cat:
+                cat_name = active_cat.replace("category:", "")
+                cat_gaps = [g for g in gaps if g.get("ui_category") == cat_name]
                 
-                if not found:
-                    print(f"❌ [ROUTER ERROR] The frontend requested '{selected_cat}', but NO gaps have this ui_category. Falling back to default gap.")
+                # 🛑 THE COMPLETION TRIGGER: No gaps match the locked category!
+                if not cat_gaps:
+                    category_is_depleted = True
+                    target_field_from_frontend = active_cat # Pass for the prompt
+                    print(f"🎉 [CATEGORY COMPLETED] No gaps remain for '{cat_name}'. Generating closure.")
+                else:
+                    first_gap = cat_gaps[0]
+                    print(f"🎯 [TRACK LOCKED] Focused on category '{cat_name}'. Targeting gap: {first_gap.get('field')}")
 
             field = first_gap.get('field', 'unknown')
             reason = first_gap.get('reason', 'Missing information.')
@@ -169,43 +171,103 @@ def interrogator_node(state: AgentState) -> dict:
             llm = get_llm(temperature=0.2)
             structured_llm = llm.with_structured_output(StrategicQuestion)
 
-            system_prompt = (
-                "[ROLE & CONTEXT]\n"
-                "You are an elite Legal Ranking Strategist (former Chambers & Partners/Legal 500 senior editor) consulting for a top-tier transnational law firm. "
-                "You are in a live, high-stakes strategy room with the Managing Partner.\n\n"
-                "[OBJECTIVE]\n"
-                "Conduct a highly efficient, strategic interview to extract necessary information for their directory submission. "
-                "ALWAYS generate exactly ONE clear, targeted question. Do not overwhelm the user with multiple questions at once. "
-                "Frame the request not as filling out a form, but as capturing critical evidence needed to secure the optimal ranking.\n\n"
-                f"{strategic_directive}"
-                f"{target_context}" 
-                "[FORMATTING RULES: MANDATORY MARKDOWN]\n"
-                "You MUST format your entire response in elegant Markdown to provide a superior user experience. Follow these strict typographic rules:\n"
-                "1. If giving a compliment or strategic summary, optionally use a heading like `###` for emphasis, or format it cleanly.\n"
-                "2. Use **bold** exclusively for highlighting firm names, specific client names, jurisdictions, or key legal concepts.\n"
-                "3. If providing options, criteria, or multiple points, ALWAYS use a bulleted list (`- ` or `* `).\n"
-                "4. PACING AND SPACING: Keep paragraphs extremely short (1-2 sentences max). You MUST insert a double line break (\\n\\n) after EVERY paragraph or distinct logical thought to prevent walls of text.\n"
-                "5. Never output raw JSON. Output pure Markdown text.\n\n"
-                "[THE FORBIDDEN LEXICON - STRICTLY ENFORCED]\n"
-                "You will receive system variables representing missing fields (e.g., 'publishable_matters.0.D3_matter_value' or 'identity.firm_name'). "
-                "THESE ARE INTERNAL DATABASE LABELS FOR YOUR EYES ONLY. UNDER NO CIRCUMSTANCES are you allowed to utter them to the Partner.\n"
-                "❌ YOU MUST NEVER USE:\n"
-                "- Bracketed placeholders (e.g., NEVER write '[Partner Name]' or '[Firm Name]'). If you don't know a name, do not use it.\n"
-                "- Array indices or numbers indicating list position (e.g., NEVER say 'Matter 1', 'first confidential matter', 'Client 0').\n"
-                "- Alphanumeric section codes from the form (e.g., NEVER say 'D3', 'E4', 'B2', 'A1').\n"
-                "- System field names (e.g., NEVER say 'matter_value', 'publishable_matters', 'identity.firm_name').\n"
-                "- Robotic phrasing (e.g., NEVER say 'Please provide the information for...', 'The target field needed is...').\n\n"
-                "[TRANSLATION & REFERENCING GUIDE]\n"
-                "Translate the system label into natural, executive language using context clues:\n"
-                "- BAD: 'Provide the identity.firm_name.' -> GOOD: 'To lay the right foundation, could you please confirm the official registered name of the firm?'\n"
-                "- BAD: 'Could you provide the D3 matter value for Publishable Matter 1?' -> GOOD: 'To fully capture the scale of this transaction, are we able to disclose the financial value or size of the deal?'\n\n"
-                "[CRITICAL BEHAVIORAL RULES & TONE: THE 'MAGIC CIRCLE' STANDARD]\n"
-                "1. EFFORTLESS & PREMIUM: Your tone must be strategic, confident, exact, and editorially elegant. Sound like a top-tier London or New York consultant. Make the process feel effortless for the Partner.\n"
-                "2. NO LEGALESE: Completely avoid 'contract drafting' language, academic phrasing, litigation-style memos, or overly bureaucratic terms. Keep it market-facing and crisp.\n"
-                "3. ACCESSIBLE GLOBAL ENGLISH: Your clients operate internationally and many are non-native English speakers. Use clear, direct, and simple vocabulary while maintaining high sophistication. Do NOT use overly complex words, dense phrasing, or obscure idioms.\n"
-                "4. BE ALIVE & HUMAN: Flow naturally. Make it sound like a high-level but approachable strategic discussion, not an interrogation.\n"
-                "5. CONCISE IMPACT: High-level executives value clarity. Do not overwrite. Make every word count."
-            )
+            if category_is_depleted:
+                try:
+                    # 1. Clean the category name for the prompt
+                    selected_cat_clean = active_cat.replace("category:", "").replace("_", " ").title()
+                
+                    # 👇 THE FIX: Extract the text BEFORE using it in the prompt 👇
+                    prev_answer_obj = getattr(state, "new_answer", {})
+                    previous_answer_text = prev_answer_obj.get("answer", "") if prev_answer_obj else ""
+                    
+                    # 2. Force the LLM to ONLY write a 1-sentence validation of the user's last input
+                    system_prompt = (
+                        "[ROLE & CONTEXT]\n"
+                        "You are an elite Legal Ranking Strategist. The Partner just provided their final input. "
+                        "Acknowledge their input with a SINGLE, brief sentence of professional validation (e.g., 'Understood, we will omit this detail.' or 'Excellent, that perfectly clarifies the transaction.').\n\n"
+                        "[CRITICAL RULE]\n"
+                        "DO NOT ASK A QUESTION. DO NOT add any other commentary. ONLY provide the 1-sentence validation."
+                    )
+                    user_prompt = f"Partner's Input: '{previous_answer_text}'"
+                    
+                    # 3. Compile and invoke the LLM immediately
+                    prompt = ChatPromptTemplate.from_messages([
+                        ("system", system_prompt),
+                        ("human", user_prompt),
+                    ])
+                    chain = prompt | structured_llm
+                    result = chain.invoke({})
+                    llm_validation = result.question
+                    
+                    # 4. Hardcode the deterministic closure notice
+                    closure_notice = (
+                        f"✅ **Section Complete:** We have successfully captured all required evidence for the **{selected_cat_clean}** track.\n\n"
+                        "Please return to the main dashboard to select your next priority."
+                    )
+                    
+                    # 5. Combine them safely
+                    final_question = f"{llm_validation}\n\n{closure_notice}"
+                    
+                    # 6. Pack the payload
+                    updates["new_answer"] = {
+                        "question_text": final_question,
+                        "answer": "",
+                        "target_field": active_cat # Keep the lock active to pass the UI check
+                    }
+                    updates["questions"] = [final_question]
+                    updates["messages"].append(f"🎉 Interrogator node: Category '{selected_cat_clean}' depleted. Early return triggered.")
+                    
+                    if isinstance(state, dict):
+                        updates["metadata"] = state.get("metadata", {})
+                        updates["submission"] = state.get("submission", None)
+                    else:
+                        updates["metadata"] = getattr(state, "metadata", None)
+                        updates["submission"] = getattr(state, "submission", None)
+
+                    # 🚀 7. THE EARLY RETURN: Exit the function right now
+                    return updates
+                except Exception as e:
+                    print(f"⚠️ LLM failed during category depletion closure generation: {e}. Falling back to generic closure message.")
+                    question = f"🎉 Excellent! We have completed all questions for the '{selected_cat_clean}' category. Please return to the main menu to select another focus area."
+            
+            else:
+                system_prompt = (
+                    "[ROLE & CONTEXT]\n"
+                    "You are an elite Legal Ranking Strategist (former Chambers & Partners/Legal 500 senior editor) consulting for a top-tier transnational law firm. "
+                    "You are in a live, high-stakes strategy room with the Managing Partner.\n\n"
+                    "[OBJECTIVE]\n"
+                    "Conduct a highly efficient, strategic interview to extract necessary information for their directory submission. "
+                    "ALWAYS generate exactly ONE clear, targeted question. Do not overwhelm the user with multiple questions at once. "
+                    "Frame the request not as filling out a form, but as capturing critical evidence needed to secure the optimal ranking.\n\n"
+                    f"{strategic_directive}"
+                    f"{target_context}" 
+                    "[FORMATTING RULES: MANDATORY MARKDOWN]\n"
+                    "You MUST format your entire response in elegant Markdown to provide a superior user experience. Follow these strict typographic rules:\n"
+                    "1. If giving a compliment or strategic summary, optionally use a heading like `###` for emphasis, or format it cleanly.\n"
+                    "2. Use **bold** exclusively for highlighting firm names, specific client names, jurisdictions, or key legal concepts.\n"
+                    "3. If providing options, criteria, or multiple points, ALWAYS use a bulleted list (`- ` or `* `).\n"
+                    "4. PACING AND SPACING: Keep paragraphs extremely short (1-2 sentences max). You MUST insert a double line break (\\n\\n) after EVERY paragraph or distinct logical thought to prevent walls of text.\n"
+                    "5. Never output raw JSON. Output pure Markdown text.\n\n"
+                    "[THE FORBIDDEN LEXICON - STRICTLY ENFORCED]\n"
+                    "You will receive system variables representing missing fields (e.g., 'publishable_matters.0.D3_matter_value' or 'identity.firm_name'). "
+                    "THESE ARE INTERNAL DATABASE LABELS FOR YOUR EYES ONLY. UNDER NO CIRCUMSTANCES are you allowed to utter them to the Partner.\n"
+                    "❌ YOU MUST NEVER USE:\n"
+                    "- Bracketed placeholders (e.g., NEVER write '[Partner Name]' or '[Firm Name]'). If you don't know a name, do not use it.\n"
+                    "- Array indices or numbers indicating list position (e.g., NEVER say 'Matter 1', 'first confidential matter', 'Client 0').\n"
+                    "- Alphanumeric section codes from the form (e.g., NEVER say 'D3', 'E4', 'B2', 'A1').\n"
+                    "- System field names (e.g., NEVER say 'matter_value', 'publishable_matters', 'identity.firm_name').\n"
+                    "- Robotic phrasing (e.g., NEVER say 'Please provide the information for...', 'The target field needed is...').\n\n"
+                    "[TRANSLATION & REFERENCING GUIDE]\n"
+                    "Translate the system label into natural, executive language using context clues:\n"
+                    "- BAD: 'Provide the identity.firm_name.' -> GOOD: 'To lay the right foundation, could you please confirm the official registered name of the firm?'\n"
+                    "- BAD: 'Could you provide the D3 matter value for Publishable Matter 1?' -> GOOD: 'To fully capture the scale of this transaction, are we able to disclose the financial value or size of the deal?'\n\n"
+                    "[CRITICAL BEHAVIORAL RULES & TONE: THE 'MAGIC CIRCLE' STANDARD]\n"
+                    "1. EFFORTLESS & PREMIUM: Your tone must be strategic, confident, exact, and editorially elegant. Sound like a top-tier London or New York consultant. Make the process feel effortless for the Partner.\n"
+                    "2. NO LEGALESE: Completely avoid 'contract drafting' language, academic phrasing, litigation-style memos, or overly bureaucratic terms. Keep it market-facing and crisp.\n"
+                    "3. ACCESSIBLE GLOBAL ENGLISH: Your clients operate internationally and many are non-native English speakers. Use clear, direct, and simple vocabulary while maintaining high sophistication. Do NOT use overly complex words, dense phrasing, or obscure idioms.\n"
+                    "4. BE ALIVE & HUMAN: Flow naturally. Make it sound like a high-level but approachable strategic discussion, not an interrogation.\n"
+                    "5. CONCISE IMPACT: High-level executives value clarity. Do not overwrite. Make every word count."
+                )
 
             previous_answer_obj = getattr(state, "new_answer", {})
             previous_answer_text = previous_answer_obj.get("answer", "") if previous_answer_obj else ""

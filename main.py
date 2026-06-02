@@ -35,8 +35,6 @@ class AgentStatePayload(BaseModel):
     current_step: str = ""
     errors: List[str] = []
     strategic_context: Dict[str, Any] = {}
-    
-    # 👇 THE FIX: Add the missing state objects to the API Contract 👇
     lawyer_profiles: List[Dict[str, Any]] = []
     positioning_core: Dict[str, Any] = {}
     positioning_tier: Dict[str, Any] = {}
@@ -241,6 +239,10 @@ async def process_documents(request: Request, background_tasks: BackgroundTasks)
             # 🛡️ THE FIX: Pass the context into LangGraph
             "strategic_context": state_input.strategic_context,
             "lawyer_profiles": state_input.lawyer_profiles,
+            "ui_audit_options": getattr(state_input, "ui_context_snapshot", {}).get("audit_room_options", []),
+            "positioning_core": state_input.positioning_core,
+            "positioning_tier": state_input.positioning_tier,
+            "executive_summary": state_input.executive_summary
         }
         config = {"configurable": {"thread_id": thread_id}}
 

@@ -84,7 +84,10 @@ def main():
         "submission": {},
         "strategic_context": {}, 
         "gaps": [],
-        "lawyer_profiles": []
+        "lawyer_profiles": [],
+        "positioning_core": {},
+        "positioning_tier": {},
+        "executive_summary": {}
     }
 
     # 2. ENVIAR PETICIÓN INICIAL
@@ -103,6 +106,7 @@ def main():
     
     has_entered_audit_room = False
     active_category = None
+    forced_generation = False
     # 3. CICLO INFINITO DE LA APLICACIÓN
     while True:
         print("\n⏳ Procesando...")
@@ -274,7 +278,6 @@ def main():
         ui_snapshot = ia_data.get("ui_context_snapshot", {})
         audit_options = ui_snapshot.get("audit_room_options", []) if ui_snapshot else []
         
-        # 👇 CORRECCIÓN: Mostrar solo si NO hemos entrado al audit room 👇
         if ui_snapshot and audit_options and not has_entered_audit_room:
             print_header("✨ VIEW 1: CONTEXTO INICIAL (DASHBOARD) ✨")
             print(f" 🏢 Firma       : {ui_snapshot.get('firm_name', 'Unknown')}")
@@ -286,7 +289,6 @@ def main():
             print("¿Qué te gustaría reforzar? (Simulando clicks de Laravel)")
             
             for i, opt in enumerate(audit_options):
-                # 👇 THE FIX: Display the exact number of remaining questions (gaps) 👇
                 count = opt.get('count', 0)
                 print(f"  [{i+1}] {opt.get('title', 'Option')} ({count} questions) - {opt.get('subtitle', '')}")
             
@@ -295,16 +297,23 @@ def main():
             
             choice = input("\n👉 Elige una opción: ").strip()
             
-            # Bloqueamos el menú para el resto de la sesión
             has_entered_audit_room = True 
 
             if choice == "99":
                 print("\n🚀 Iniciando fase de Ghostwriting y Ensamblaje...")
-                forced_generation = True  # 👈 THE FIX: Lock frontend into reporting mode
+                forced_generation = True  
                 agent_state["new_answer"] = {
                     "target_field": "COMMAND:GENERATE",
                     "question_text": "",
                     "answer": ""
+                }
+                if "strategic_context" not in agent_state:
+                    agent_state["strategic_context"] = {}
+                agent_state["strategic_context"]["active_category"] = active_category
+                
+                payload_respuesta = {
+                    "thread_id": thread_id,
+                    "agent_state": agent_state
                 }
                 payload_respuesta = {"thread_id": thread_id, "agent_state": agent_state}
                 resp = requests.post(f"{BASE_URL}/process", json=payload_respuesta)
@@ -322,12 +331,16 @@ def main():
 
                 active_category = selected_opt["id"]
                 
-                # Send the strategic signal exactly like Laravel would
                 agent_state["new_answer"] = {
                     "target_field": active_category,
                     "question_text": "",
                     "answer": ""
                 }
+                
+                # 👇 THE FIX: Inject the lock state into the context BEFORE the API call 👇
+                if "strategic_context" not in agent_state:
+                    agent_state["strategic_context"] = {}
+                agent_state["strategic_context"]["active_category"] = active_category
                 
                 payload_respuesta = {
                     "thread_id": thread_id,
@@ -340,37 +353,30 @@ def main():
                     break
                     
                 current_job_id = resp.json().get("job_id")
-                continue # Restart loop to receive the specifically targeted question
+                continue
                 
         # =======================================================
         # 🤖 VIEW 2: INTERROGACIÓN (Default o Específica)
         # =======================================================
         preguntas = ia_data.get("questions", [])
         pregunta = preguntas[0] if preguntas else "¿Puedes proporcionar más detalles sobre esto?"
+        
         print(f"\n🤖 IA: {pregunta}")
         
-        # 👇 FIX: Eliminamos el input duplicado. Todo en uno solo. 👇
+        # Normal question flow continues here
         print("\n  [💡 Escribe '/menu' para volver al Dashboard de opciones]")
         respuesta_usuario = input("\n👤 Tu respuesta: ")
         
         if respuesta_usuario.strip().lower() == "/menu":
             has_entered_audit_room = False
+            active_category = None
             print("\n🔄 Volviendo al menú principal...")
-            continue # Reinicia el ciclo local sin llamar a la API
-        # 👆 FIN DEL COMANDO TÁCTICO 👆
+            continue 
         
+        # 👇 THE FIX: Safely lock onto the target field without an else-block intercept 👇
         if active_category:
-            cat_options = [opt for opt in audit_options if opt["id"] == active_category]
-            if cat_options and cat_options[0].get("count", 0) > 0:
-                # 👇 THE FIX: Find the actual target field belonging to this category! 👇
-                cat_name = active_category.split(":")[1]
-                gap_actual = next((g["field"] for g in gaps if g.get("ui_category") == cat_name), gaps[0]["field"])
-            else:
-                print_header(f"✅ ¡Excelente! Se completaron todas las preguntas para esta categoría.")
-                print("🔄 Volviendo al menú principal para que elijas otro enfoque...")
-                has_entered_audit_room = False
-                active_category = None
-                continue 
+            cat_name = active_category.split(":")[1]
+            gap_actual = next((g["field"] for g in gaps if g.get("ui_category") == cat_name), gaps[0]["field"])
         else:
             gap_actual = gaps[0]["field"] if gaps else "general"
         
