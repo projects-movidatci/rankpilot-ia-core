@@ -277,7 +277,20 @@ def process_answer_node(state: AgentState) -> dict:
                     
                     if success:
                         try:
-                            updates["submission"] = type(submission)(**sub_dict)
+                            # 👇 THE FIX: Schema-Aware Reconstruction 👇
+                            submission_type = getattr(state, "target_submission_type", "")
+                            
+                            if submission_type == "MattersAssistant":
+                                from src.core.schemas import SingleMatterExtraction, ExtractedMatter
+                                # Manually rebuild the nested ExtractedMatter object
+                                matter_dict = sub_dict.get("matter", {})
+                                rebuilt_matter = ExtractedMatter(**matter_dict)
+                                updates["submission"] = SingleMatterExtraction(matter=rebuilt_matter)
+                            else:
+                                # Default behavior for Chambers/Legal500
+                                updates["submission"] = type(submission)(**sub_dict)
+                            # 👆 ===================================== 👆
+
                             updates["messages"].append(f"SUCCESS: Field '{target_field}' updated.")
                             
                             # =======================================================
@@ -294,7 +307,7 @@ def process_answer_node(state: AgentState) -> dict:
 
                         except ValidationError as e:
                             updates["submission"] = sub_dict 
-                            updates["messages"].append(f"WARNING: Type mismatch in '{target_field}', stored as raw data.")
+                            updates["messages"].append(f"WARNING: Type mismatch in '{target_field}', stored as raw data. Error: {e}")
                     else:
                         updates["messages"].append(f"ERROR: Path '{target_field}' not found.")
 

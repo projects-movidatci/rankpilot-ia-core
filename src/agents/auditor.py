@@ -149,6 +149,12 @@ def audit_node(state: AgentState) -> dict:
                 "field": "metadata.submission_deadline",
                 "reason": "The system requires the official submission deadline to calculate the strategic roadmap and urgency."
             })
+    
+    if sub_type == "MattersAssistant":
+        # Direct Interrogation Flow: No UI categories needed for Act 0.
+        updates["gaps"] = active_gaps
+        updates["messages"].append(f"Audit node (Act 0): Found {len(active_gaps)} gaps. Routing to direct interrogation.")
+        return updates
 
     # 👇 THE PERFECTED 4-PILLAR UI CATEGORIZATION 👇
     for gap in active_gaps:

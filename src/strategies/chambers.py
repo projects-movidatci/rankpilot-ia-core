@@ -83,6 +83,34 @@ class ChambersStrategy(SubmissionStrategy):
         Uses python-docx to prepare data and assemble the Chambers docx.
         Pads all arrays to prevent IndexError in docxtpl.
         """
+        # =========================================================
+        # 🧠 THE STRATEGIC SORT: Highest Score First
+        # =========================================================
+        def safe_sort_matters(matters_list: List[Dict]) -> List[Dict]:
+            def get_score(matter: Dict) -> int:
+                try:
+                    # Navigate the nested dictionary safely
+                    eval_data = matter.get("evaluation", {})
+                    # If it's a Pydantic model inside the dict, use getattr, otherwise use .get
+                    if hasattr(eval_data, "total_score"):
+                        return int(getattr(eval_data, "total_score", 0))
+                    return int(eval_data.get("total_score", 0))
+                except Exception:
+                    return 0
+            
+            # Sort in descending order (highest score first)
+            return sorted(matters_list, key=get_score, reverse=True)
+
+        # Apply the sort to the submission_data BEFORE creating the context
+        pub_info = submission_data.get("D_publishable_information", {})
+        if pub_info and "publishable_matters" in pub_info:
+            pub_info["publishable_matters"] = safe_sort_matters(pub_info["publishable_matters"])
+
+        conf_info = submission_data.get("E_confidential_information", {})
+        if conf_info and "confidential_matters" in conf_info:
+            conf_info["confidential_matters"] = safe_sort_matters(conf_info["confidential_matters"])
+        # =========================================================
+
         # ==========================================
         # 1. TRANSLATION DICTIONARY (Pydantic -> Jinja2)
         # ==========================================

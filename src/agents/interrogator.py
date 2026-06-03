@@ -51,7 +51,16 @@ def interrogator_node(state: AgentState) -> dict:
             client_name = "Unknown Client"
             
             try:
-                if "publishable_matters" in field or "confidential_matters" in field:
+                if "matter." in field:
+                    sub = getattr(state, "submission", None)
+                    if sub:
+                        matter_obj = getattr(sub, "matter", None)
+                        if matter_obj:
+                            client_name = getattr(matter_obj, "client_name", "Unknown Client")
+                            matter_summary = getattr(matter_obj, "summary_of_matter_and_role", "")
+                            if client_name and client_name != "Unknown Client":
+                                target_context = f"\n[CRITICAL CONTEXT: You are asking about the specific matter for the client: '{client_name}'. YOU MUST MENTION THIS CLIENT NAME IN YOUR QUESTION.]\n"
+                elif "publishable_matters" in field or "confidential_matters" in field:
                     parts = field.split(".")
                     if len(parts) >= 3 and parts[2].isdigit():
                         matter_idx = int(parts[2])
