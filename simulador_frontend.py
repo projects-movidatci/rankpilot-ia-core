@@ -128,7 +128,47 @@ def main():
                 
             elif status_data["status"] == "completed":
                 print(f"\n\n[{'█'*20}] 100% - ¡Proceso Completado!")
-                break 
+                
+                # 👇 THE FIX: Force the print of the final strategic readouts here 👇
+                final_data = status_data.get("data", {})
+                if final_data:
+                    p_core = to_dict(final_data.get("positioning_core", {}))
+                    p_tier = to_dict(final_data.get("positioning_tier", {}))
+                    s_context = to_dict(final_data.get("strategic_context", {}))
+                    exec_summary = to_dict(final_data.get("executive_summary", {}))
+                    
+                    if p_core or exec_summary:
+                        print_header("🏆 DIAGNÓSTICO ESTRATÉGICO FINAL")
+                        print(f" { 'ARQUETIPO':<20} : {p_core.get('practice_model', 'N/A')}")
+                        print(f" { 'TIER DETECTADO':<20} : {p_tier.get('label', 'N/A')}")
+                        print(f" { 'TARGET':<20} : {s_context.get('realistic_target', 'N/A')}")
+                        
+                        conf = p_core.get('confidence_score', 0)
+                        print(f" { 'CONFIANZA':<20} : {float(conf)}%")
+                        
+                        print_header("🎨 ESTRATEGIA DE NARRATIVA (MAQUILLAJE)")
+                        guidelines = p_core.get("narrative_guidelines", "No guidelines generated.")
+                        if isinstance(guidelines, list):
+                            for g in guidelines: print(f" • {g}")
+                        else:
+                            print(guidelines)
+            
+                        print_header("📝 REPORTE FINAL DEL EXECUTIVE WRITER")
+                        if exec_summary:
+                            score = exec_summary.get('overall_score', 'N/A')
+                            risk = exec_summary.get('risk_level', 'N/A')
+                            
+                            print(f" 📊 SCORE GLOBAL   : {score}/100")
+                            print(f" ⚠️ NIVEL DE RIESGO: {risk.upper() if isinstance(risk, str) else risk}")
+                            print(f"\n 💡 VEREDICTO ESTRATÉGICO:\n {exec_summary.get('strategic_verdict', 'Sin veredicto.')}")
+                            print("\n 📄 AUDIT LETTER (Fragmento):")
+                            letter = exec_summary.get('audit_letter_markdown', '')
+                            print(f" {letter[:500]}..." if letter else "No letter generated.")
+                        else:
+                            print("⚠️ No se encontró el bloque 'executive_summary'.")
+                # 👆 ======================================================== 👆
+                
+                break
             
             elif status_data["status"] == "failed":
                 print("\n\n❌ EL TRABAJO FALLÓ EN EL SERVIDOR.")
